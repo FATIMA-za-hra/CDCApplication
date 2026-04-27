@@ -1,0 +1,166 @@
+/* ── LAYOUT UNIQUEMENT - aucun override PrimeReact ── */
+
+.cdc-layout { display: flex; min-height: 100vh; }
+
+/* SIDEBAR */
+.cdc-sidebar {
+  width: 240px;
+  min-height: 100vh;
+  background: #0f172a;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  left: 0; top: 0; bottom: 0;
+  z-index: 100;
+  transition: width 0.25s;
+  overflow: hidden;
+}
+.cdc-sidebar.collapsed { width: 60px; }
+
+.cdc-sidebar-logo {
+  padding: 20px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid #1e293b;
+  min-height: 66px;
+  box-sizing: border-box;
+}
+.cdc-logo-icon {
+  width: 36px; height: 36px;
+  background: #1a73e8;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: white; font-weight: 800; font-size: 13px;
+  flex-shrink: 0;
+}
+.cdc-logo-text { color: #f8fafc; font-weight: 700; font-size: 15px; white-space: nowrap; }
+.cdc-logo-text span { color: #1a73e8; }
+
+.cdc-sidebar-nav { flex: 1; padding: 16px 0; }
+
+.cdc-nav-section-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1.2px; color: #475569;
+  padding: 0 18px 10px; white-space: nowrap; display: block;
+}
+.cdc-sidebar.collapsed .cdc-nav-section-label { opacity: 0; }
+
+.cdc-nav-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 16px 13px 18px;
+  color: #cbd5e1;
+  text-decoration: none;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap; overflow: hidden;
+}
+.cdc-nav-item:hover { background: #1e293b; color: #f1f5f9; }
+.cdc-nav-item.active { background: rgba(26,115,232,.18); color: #60a5fa; border-left-color: #1a73e8; }
+.cdc-nav-item i { font-size: 17px; flex-shrink: 0; width: 20px; text-align: center; }
+.cdc-nav-label { font-size: 14px; font-weight: 500; }
+
+/* MAIN */
+.cdc-main { margin-left: 240px; flex: 1; display: flex; flex-direction: column; min-height: 100vh; transition: margin-left 0.25s; }
+.cdc-main.collapsed { margin-left: 60px; }
+
+/* TOPBAR */
+.cdc-topbar {
+  height: 58px;
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex; align-items: center;
+  padding: 0 28px;
+  position: sticky; top: 0; z-index: 50;
+  box-shadow: 0 1px 4px rgba(0,0,0,.05);
+  box-sizing: border-box;
+}
+.cdc-topbar-left { display: flex; align-items: center; gap: 16px; }
+.cdc-toggle-btn {
+  width: 36px; height: 36px; border: none;
+  background: #f1f5f9; border-radius: 8px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  color: #64748b; font-size: 15px;
+}
+.cdc-toggle-btn:hover { background: #e2e8f0; }
+.cdc-page-title { font-size: 16px; font-weight: 700; color: #0f172a; }
+
+/* CONTENT */
+.cdc-content { padding: 28px; flex: 1; }
+
+.cdc-page-header {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+}
+.cdc-page-header h1 { font-size: 22px; font-weight: 700; color: #0f172a; margin: 0; }
+.cdc-page-header p { font-size: 13px; color: #64748b; margin: 3px 0 0 0; }
+
+/* CARD - wraps DataTable */
+.cdc-card {
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+}
+
+/* STATUS BADGES - colonnes Statut */
+.status-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: 20px;
+  font-size: 12px; font-weight: 600;
+}
+.status-badge.actif   { background: #dcfce7; color: #16a34a; }
+.status-badge.inactif { background: #fee2e2; color: #dc2626; }
+
+/* PRIVILEGE BADGES - arborescence */
+.priv-badge {
+  display: inline-flex; align-items: center;
+  padding: 2px 7px; border-radius: 4px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+}
+.priv-badge.create { background: #dcfce7; color: #15803d; }
+.priv-badge.read   { background: #dbeafe; color: #1d4ed8; }
+.priv-badge.update { background: #fef9c3; color: #a16207; }
+.priv-badge.delete { background: #fee2e2; color: #dc2626; }
+.priv-badge.other  { background: #f3e8ff; color: #7e22ce; }
+
+/* PRIVILEGE TREE */
+.priv-tree { border: 1px solid #dee2e6; border-radius: 6px; overflow: hidden; }
+.priv-tree-group { border-bottom: 1px solid #f3f4f6; }
+.priv-tree-group:last-child { border-bottom: none; }
+.priv-tree-group-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; background: #f9fafb;
+  cursor: pointer; user-select: none;
+}
+.priv-tree-group-header:hover { background: #f3f4f6; }
+.priv-group-name { font-weight: 600; font-size: 13px; color: #374151; text-transform: capitalize; flex: 1; }
+.priv-group-count { font-size: 11px; color: #9ca3af; background: #e5e7eb; padding: 1px 7px; border-radius: 10px; }
+.priv-tree-children { padding: 2px 0 2px 10px; }
+.priv-tree-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 12px; border-radius: 4px; cursor: pointer;
+}
+.priv-tree-item:hover { background: #f9fafb; }
+.priv-nom { font-size: 12px; color: #6b7280; font-family: monospace; }
+
+/* AUTH PAGE */
+.cdc-auth-page {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%);
+  padding: 20px; box-sizing: border-box;
+}
+.cdc-auth-card {
+  background: white; border-radius: 14px; padding: 44px 40px;
+  width: 100%; max-width: 420px; box-shadow: 0 20px 60px rgba(0,0,0,.3);
+  box-sizing: border-box;
+}
+.cdc-auth-logo-icon {
+  width: 52px; height: 52px; background: #1a73e8; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 12px; font-weight: 800; color: white; font-size: 18px;
+}
+.cdc-auth-title { font-size: 21px; font-weight: 700; color: #0f172a; text-align: center; margin-bottom: 6px; }
+.cdc-auth-subtitle { font-size: 13px; color: #64748b; text-align: center; margin-bottom: 24px; line-height: 1.5; }

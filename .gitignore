@@ -1,0 +1,52 @@
+# =========================
+# BACKEND - Spring Boot
+# =========================
+target/
+*.log
+*.class
+*.jar
+*.war
+*.ear
+
+# Fichiers de config sensibles
+application.properties
+
+# =========================
+# FRONTEND - React (Vite)
+# =========================
+node_modules/
+dist/
+build/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# =========================
+# ENVIRONNEMENT
+# =========================
+.env
+.env.local
+.env.*.local
+
+# =========================
+# IDE / EDITEURS
+# =========================
+# Eclipse
+.project
+.classpath
+.settings/
+
+# IntelliJ
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+
+# =========================
+# OS
+# =========================
+.DS_Store
+Thumbs.db
