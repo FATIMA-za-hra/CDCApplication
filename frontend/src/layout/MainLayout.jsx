@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog'
+import { authUtils } from '../services/api'
 
 const NAV = [
   { label: 'Utilisateurs', icon: 'pi pi-users',  to: '/utilisateurs' },
@@ -18,7 +19,11 @@ export default function MainLayout() {
   const [collapsed, setCollapsed] = useState(false)
   const { pathname } = useLocation()
   const navigate = useNavigate()
-  const username = localStorage.getItem('cdc_username') || 'Admin'
+
+  const prenom  = authUtils.getPrenom() || ''
+  const nom     = authUtils.getNom() || ''
+  const initials = `${prenom[0] || ''}${nom[0] || ''}`.toUpperCase()
+  const roles   = authUtils.getRoles()
 
   const handleLogout = () => {
     confirmDialog({
@@ -29,8 +34,7 @@ export default function MainLayout() {
       rejectLabel: 'Annuler',
       acceptClassName: 'p-button-danger',
       accept: () => {
-        localStorage.removeItem('cdc_token')
-        localStorage.removeItem('cdc_username')
+        localStorage.clear()
         navigate('/login', { replace: true })
       }
     })
@@ -62,7 +66,7 @@ export default function MainLayout() {
           ))}
         </nav>
 
-        {/* Déconnexion en bas sidebar */}
+        {/* Déconnexion bas sidebar */}
         <div style={{ padding: '12px 8px', borderTop: '1px solid #1e293b' }}>
           <div
             className="cdc-nav-item"
@@ -83,8 +87,6 @@ export default function MainLayout() {
       {/* MAIN */}
       <div className={`cdc-main${collapsed ? ' collapsed' : ''}`}>
         <header className="cdc-topbar" style={{ justifyContent: 'space-between' }}>
-
-          {/* Gauche : toggle + titre */}
           <div className="cdc-topbar-left">
             <button className="cdc-toggle-btn" onClick={() => setCollapsed(c => !c)}>
               <i className="pi pi-bars"></i>
@@ -92,21 +94,27 @@ export default function MainLayout() {
             <span className="cdc-page-title">{TITLES[pathname] || 'CDCApplication'}</span>
           </div>
 
-          {/* Droite : avatar + nom admin */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Badge utilisateur connecté - haut droite */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
               width: 34, height: 34, borderRadius: '50%',
-              background: '#1a73e8',
+              background: '#1a73e8', color: 'white',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'white', fontWeight: 700, fontSize: 14, flexShrink: 0
+              fontSize: 13, fontWeight: 700, flexShrink: 0
             }}>
-              <i className="pi pi-user" style={{ fontSize: 14 }}></i>
+              {initials || <i className="pi pi-user" style={{ fontSize: 13 }}></i>}
             </div>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>
-              {username}
-            </span>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>
+                {prenom} {nom}
+              </div>
+              {roles.length > 0 && (
+                <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                  {roles.join(', ')}
+                </div>
+              )}
+            </div>
           </div>
-
         </header>
 
         <main className="cdc-content">

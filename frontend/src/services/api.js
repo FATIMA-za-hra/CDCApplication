@@ -8,24 +8,38 @@ const api = axios.create({
 // Injecter le token JWT dans chaque requête
 api.interceptors.request.use(config => {
   const token = localStorage.getItem('cdc_token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
+  if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
 
-// Si 401 : rediriger vers le login
+// Si 401 -> rediriger vers login
 api.interceptors.response.use(
   response => response,
   error => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('cdc_token')
-      localStorage.removeItem('cdc_username')
+      localStorage.clear()
       window.location.href = '/login'
     }
     return Promise.reject(error)
   }
 )
+
+// Helpers pour lire les infos stockées
+export const authUtils = {
+  getToken:      () => localStorage.getItem('cdc_token'),
+  getNom:        () => localStorage.getItem('cdc_nom'),
+  getPrenom:     () => localStorage.getItem('cdc_prenom'),
+  getEmail:      () => localStorage.getItem('cdc_email'),
+  getRoles:      () => JSON.parse(localStorage.getItem('cdc_roles') || '[]'),
+  getPrivileges: () => JSON.parse(localStorage.getItem('cdc_privileges') || '[]'),
+  isAdmin:       () => localStorage.getItem('cdc_isAdmin') === 'true',
+  hasRole:       (role) => authUtils.getRoles().includes(role.toUpperCase()),
+  hasPrivilege:  (priv) => authUtils.isAdmin() || authUtils.getPrivileges().includes(priv.toUpperCase()),
+  logout: () => {
+    localStorage.clear()
+    window.location.href = '/login'
+  }
+}
 
 export const authApi = {
   login: (data) => axios.post('/api/auth/login', data)
