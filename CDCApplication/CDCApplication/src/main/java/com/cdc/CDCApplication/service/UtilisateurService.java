@@ -1,6 +1,5 @@
 package com.cdc.CDCApplication.service;
 
-import com.cdc.CDCApplication.config.PasswordEncoder;
 import com.cdc.CDCApplication.dto.PrivilegeDto;
 import com.cdc.CDCApplication.dto.RoleDto;
 import com.cdc.CDCApplication.dto.UtilisateurDto;
@@ -8,12 +7,12 @@ import com.cdc.CDCApplication.entity.Role;
 import com.cdc.CDCApplication.entity.Utilisateur;
 import com.cdc.CDCApplication.repository.RoleRepository;
 import com.cdc.CDCApplication.repository.UtilisateurRepository;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -22,13 +21,16 @@ public class UtilisateurService {
     private final UtilisateurRepository utilisateurRepository;
     private final RoleRepository roleRepository;
     private final EmailService emailService;
+    private final PasswordEncoder passwordEncoder;
 
     public UtilisateurService(UtilisateurRepository utilisateurRepository,
                                RoleRepository roleRepository,
-                               EmailService emailService) {
+                               EmailService emailService,
+                               PasswordEncoder passwordEncoder) {
         this.utilisateurRepository = utilisateurRepository;
         this.roleRepository = roleRepository;
         this.emailService = emailService;
+        this.passwordEncoder = passwordEncoder;
     }
 
     public UtilisateurDto.Response creer(UtilisateurDto.Request dto) {
@@ -117,7 +119,7 @@ public class UtilisateurService {
         if (u.getTokenExpiry() == null || u.getTokenExpiry().isBefore(LocalDateTime.now())) {
             throw new RuntimeException("Ce lien a expire. Contactez votre administrateur.");
         }
-        u.setMotDePasse(PasswordEncoder.encode(dto.getMotDePasse()));
+        u.setMotDePasse(passwordEncoder.encode(dto.getMotDePasse()));
         u.setTokenResetMdp(null);
         u.setTokenExpiry(null);
         u.setCompteConfigure(true);
