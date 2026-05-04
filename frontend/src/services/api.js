@@ -74,3 +74,31 @@ export const privilegeApi = {
 }
 
 export default api
+
+export const categorieApi = {
+  getAll:    ()      => api.get('/categories-adhesion'),
+  getActives:()      => api.get('/categories-adhesion/actives'),
+  getById:   (id)    => api.get(`/categories-adhesion/${id}`),
+  create:    (data)  => api.post('/categories-adhesion', data),
+  update:    (id, d) => api.put(`/categories-adhesion/${id}`, d),
+  delete:    (id)    => api.delete(`/categories-adhesion/${id}`)
+}
+
+export const adherentApi = {
+  getAll:         ()         => api.get('/adherents'),
+  getById:        (id)       => api.get(`/adherents/${id}`),
+  getByStatut:    (statut)   => api.get(`/adherents/statut/${statut}`),
+  create:         (data)     => api.post('/adherents', data),
+  update:         (id, d)    => api.put(`/adherents/${id}`, d),
+  delete:         (id)       => api.delete(`/adherents/${id}`)
+}
+
+export const adhesionApi = {
+  getAll:         ()         => api.get('/adhesions'),
+  getById:        (id)       => api.get(`/adhesions/${id}`),
+  getByAdherent:  (adhId)    => api.get(`/adhesions/adherent/${adhId}`),
+  getByAnnee:     (annee)    => api.get(`/adhesions/annee/${annee}`),
+  create:         (data)     => api.post('/adhesions', data),
+  update:         (id, d)    => api.put(`/adhesions/${id}`, d),
+  delete:         (id)       => api.delete(`/adhesions/${id}`)
+}
