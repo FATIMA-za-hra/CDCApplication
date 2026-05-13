@@ -9,17 +9,17 @@ import java.util.Optional;
 
 @Repository
 public interface AdherentRepository extends JpaRepository<Adherent, Long> {
-    Optional<Adherent> findByCin(String cin);
-    Optional<Adherent> findByNumeroAdherent(String numeroAdherent);
-    Optional<Adherent> findByEmail(String email);
+
     boolean existsByCin(String cin);
     boolean existsByEmail(String email);
+
     List<Adherent> findByStatut(Adherent.StatutAdherent statut);
-    List<Adherent> findByCategorieId(Long categorieId);
 
-    @Query("SELECT COUNT(a) FROM Adherent a WHERE a.statut = 'ACTIF'")
-    long countActifs();
+    Optional<Adherent> findByEmail(String email);
 
-    @Query("SELECT MAX(a.numeroAdherent) FROM Adherent a WHERE a.numeroAdherent IS NOT NULL")
+    // Retrouver l'adhérent lié à un compte utilisateur (pour le self-service)
+    Optional<Adherent> findByUtilisateurId(Long utilisateurId);
+
+    @Query("SELECT MAX(a.numeroAdherent) FROM Adherent a WHERE a.numeroAdherent LIKE 'ADH-%'")
     String findMaxNumeroAdherent();
 }

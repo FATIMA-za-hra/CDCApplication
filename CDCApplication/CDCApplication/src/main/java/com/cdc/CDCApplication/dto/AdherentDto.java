@@ -75,6 +75,7 @@ public class AdherentDto {
         private LocalDate dateCreation;
         private Long utilisateurId;
         private boolean compteUtilisateurCree;
+        private String photoChemin;  // URL /api/adherents/{id}/photo
 
         public Long getId() { return id; }
         public void setId(Long id) { this.id = id; }
@@ -116,5 +117,7 @@ public class AdherentDto {
         public void setUtilisateurId(Long utilisateurId) { this.utilisateurId = utilisateurId; }
         public boolean isCompteUtilisateurCree() { return compteUtilisateurCree; }
         public void setCompteUtilisateurCree(boolean b) { this.compteUtilisateurCree = b; }
+        public String getPhotoChemin() { return photoChemin; }
+        public void setPhotoChemin(String photoChemin) { this.photoChemin = photoChemin; }
     }
 }

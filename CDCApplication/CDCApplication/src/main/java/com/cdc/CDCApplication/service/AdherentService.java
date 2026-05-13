@@ -3,7 +3,6 @@ package com.cdc.CDCApplication.service;
 import com.cdc.CDCApplication.dto.AdherentDto;
 import com.cdc.CDCApplication.dto.CategorieAdhesionDto;
 import com.cdc.CDCApplication.entity.Adherent;
-import com.cdc.CDCApplication.entity.CategorieAdhesion;
 import com.cdc.CDCApplication.entity.Utilisateur;
 import com.cdc.CDCApplication.repository.AdherentRepository;
 import com.cdc.CDCApplication.repository.CategorieAdhesionRepository;
@@ -22,39 +21,47 @@ public class AdherentService {
     private final CategorieAdhesionRepository categorieRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final EmailService emailService;
+    private final HistoriqueService historiqueService;
 
     public AdherentService(AdherentRepository adherentRepository,
                             CategorieAdhesionRepository categorieRepository,
                             UtilisateurRepository utilisateurRepository,
-                            EmailService emailService) {
-        this.adherentRepository = adherentRepository;
-        this.categorieRepository = categorieRepository;
+                            EmailService emailService,
+                            HistoriqueService historiqueService) {
+        this.adherentRepository   = adherentRepository;
+        this.categorieRepository  = categorieRepository;
         this.utilisateurRepository = utilisateurRepository;
-        this.emailService = emailService;
+        this.emailService         = emailService;
+        this.historiqueService    = historiqueService;
     }
 
     public AdherentDto.Response creer(AdherentDto.Request dto) {
-        if (dto.getCin() != null && adherentRepository.existsByCin(dto.getCin())) {
-            throw new RuntimeException("Un adhérent avec ce CIN existe déjà.");
-        }
-        if (dto.getEmail() != null && adherentRepository.existsByEmail(dto.getEmail())) {
-            throw new RuntimeException("Un adhérent avec cet email existe déjà.");
-        }
+        if (dto.getCin() != null && !dto.getCin().isBlank()
+                && adherentRepository.existsByCin(dto.getCin()))
+            throw new RuntimeException("Un adherent avec ce CIN existe deja.");
+        if (dto.getEmail() != null && !dto.getEmail().isBlank()
+                && adherentRepository.existsByEmail(dto.getEmail()))
+            throw new RuntimeException("Un adherent avec cet email existe deja.");
 
         Adherent adherent = new Adherent();
         adherent.setNumeroAdherent(genererNumeroAdherent());
-        mapRequestToAdherent(dto, adherent);
         adherent.setDateCreation(LocalDate.now());
+        mapDtoToAdherent(dto, adherent);
 
-        // Créer automatiquement le compte utilisateur
         if (dto.getEmail() != null && !dto.getEmail().isBlank()) {
-            Utilisateur utilisateur = creerCompteUtilisateur(adherent);
-            adherent.setUtilisateur(utilisateur);
+            Utilisateur u = creerCompteUtilisateur(adherent);
+            adherent.setUtilisateur(u);
         }
 
         Adherent saved = adherentRepository.save(adherent);
 
-        // Envoyer l'email de configuration si compte créé
+        // Historique dans la même transaction (l'ID existe après save)
+        historiqueService.enregistrer(
+            saved.getId(), "CREATION", null, null,
+            "Fiche creee : " + saved.getNumeroAdherent(),
+            "Creation de la fiche adherent"
+        );
+
         if (saved.getUtilisateur() != null) {
             try {
                 String token = UUID.randomUUID().toString();
@@ -64,8 +71,7 @@ public class AdherentService {
                 utilisateurRepository.save(u);
                 emailService.envoyerEmailCreationCompte(u.getEmail(), u.getNom(), u.getPrenom(), token);
             } catch (Exception e) {
-                // Ne pas bloquer la création si l'email échoue
-                System.err.println("Erreur envoi email: " + e.getMessage());
+                System.err.println("Erreur email: " + e.getMessage());
             }
         }
 
@@ -73,139 +79,159 @@ public class AdherentService {
     }
 
     public AdherentDto.Response modifier(Long id, AdherentDto.Request dto) {
-        Adherent adherent = adherentRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Adhérent introuvable: " + id));
+        Adherent ancien = adherentRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Adherent introuvable: " + id));
 
-        if (dto.getCin() != null && !dto.getCin().equals(adherent.getCin())
-                && adherentRepository.existsByCin(dto.getCin())) {
-            throw new RuntimeException("Un adhérent avec ce CIN existe déjà.");
+        if (dto.getCin() != null && !dto.getCin().equals(ancien.getCin())
+                && adherentRepository.existsByCin(dto.getCin()))
+            throw new RuntimeException("Un adherent avec ce CIN existe deja.");
+
+        // ── Capturer TOUTES les anciennes valeurs avant modification ──
+        final Long   aid       = ancien.getId();
+        final String oldNom    = ancien.getNom();
+        final String oldPrenom = ancien.getPrenom();
+        final String oldStatut = ancien.getStatut() != null ? ancien.getStatut().name() : null;
+        final String oldTel    = ancien.getTelephone();
+        final String oldEmail  = ancien.getEmail();
+        final String oldSvc    = ancien.getService();
+        final String oldAdr    = ancien.getAdresse();
+        final String oldSit    = ancien.getSituationFamiliale();
+        final Integer oldEnf   = ancien.getNombreEnfants();
+        final Long   oldCatId  = ancien.getCategorie() != null ? ancien.getCategorie().getId() : null;
+        final String oldCatLib = ancien.getCategorie() != null ? ancien.getCategorie().getLibelle() : "Aucune";
+
+        // ── Modifier et sauvegarder ──
+        mapDtoToAdherent(dto, ancien);
+        adherentRepository.save(ancien);
+
+        // ── Enregistrer les changements dans l'historique ──
+        if (dto.getNom() != null && !dto.getNom().equals(oldNom))
+            historiqueService.enregistrer(aid, "MODIFICATION", "nom", oldNom, dto.getNom(), null);
+
+        if (dto.getPrenom() != null && !dto.getPrenom().equals(oldPrenom))
+            historiqueService.enregistrer(aid, "MODIFICATION", "prenom", oldPrenom, dto.getPrenom(), null);
+
+        if (dto.getStatut() != null && !dto.getStatut().toUpperCase().equals(oldStatut))
+            historiqueService.enregistrer(aid, "CHANGEMENT_STATUT", "statut", oldStatut, dto.getStatut().toUpperCase(), null);
+
+        if (dto.getTelephone() != null && !dto.getTelephone().equals(oldTel))
+            historiqueService.enregistrer(aid, "MODIFICATION", "telephone", oldTel, dto.getTelephone(), null);
+
+        if (dto.getEmail() != null && !dto.getEmail().equals(oldEmail))
+            historiqueService.enregistrer(aid, "MODIFICATION", "email", oldEmail, dto.getEmail(), null);
+
+        if (dto.getService() != null && !dto.getService().equals(oldSvc))
+            historiqueService.enregistrer(aid, "MODIFICATION", "service", oldSvc, dto.getService(), null);
+
+        if (dto.getAdresse() != null && !dto.getAdresse().equals(oldAdr))
+            historiqueService.enregistrer(aid, "MODIFICATION", "adresse", oldAdr, dto.getAdresse(), null);
+
+        if (dto.getSituationFamiliale() != null && !dto.getSituationFamiliale().equals(oldSit))
+            historiqueService.enregistrer(aid, "MODIFICATION", "situationFamiliale", oldSit, dto.getSituationFamiliale(), null);
+
+        if (dto.getNombreEnfants() != null && !dto.getNombreEnfants().equals(oldEnf))
+            historiqueService.enregistrer(aid, "MODIFICATION", "nombreEnfants",
+                String.valueOf(oldEnf), String.valueOf(dto.getNombreEnfants()), null);
+
+        if (dto.getCategorieId() != null && !dto.getCategorieId().equals(oldCatId)) {
+            String newLib = ancien.getCategorie() != null ? ancien.getCategorie().getLibelle() : dto.getCategorieId().toString();
+            historiqueService.enregistrer(aid, "MODIFICATION", "categorie", oldCatLib, newLib, null);
         }
 
-        mapRequestToAdherent(dto, adherent);
-        return toResponse(adherentRepository.save(adherent));
+        return toResponse(ancien);
     }
 
     public void supprimer(Long id) {
-        Adherent adherent = adherentRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Adhérent introuvable: " + id));
-        adherentRepository.delete(adherent);
+        Adherent a = adherentRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Adherent introuvable: " + id));
+        adherentRepository.delete(a);
     }
 
     @Transactional(readOnly = true)
     public AdherentDto.Response findById(Long id) {
         return toResponse(adherentRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Adhérent introuvable: " + id)));
+                .orElseThrow(() -> new RuntimeException("Adherent introuvable: " + id)));
     }
 
     @Transactional(readOnly = true)
     public List<AdherentDto.Response> findAll() {
         List<AdherentDto.Response> list = new ArrayList<>();
-        for (Adherent a : adherentRepository.findAll()) {
-            list.add(toResponse(a));
-        }
+        for (Adherent a : adherentRepository.findAll()) list.add(toResponse(a));
         return list;
     }
 
     @Transactional(readOnly = true)
     public List<AdherentDto.Response> findByStatut(String statut) {
         List<AdherentDto.Response> list = new ArrayList<>();
-        for (Adherent a : adherentRepository.findByStatut(Adherent.StatutAdherent.valueOf(statut.toUpperCase()))) {
+        for (Adherent a : adherentRepository.findByStatut(
+                Adherent.StatutAdherent.valueOf(statut.toUpperCase())))
             list.add(toResponse(a));
-        }
         return list;
     }
 
-    // Générer numéro adhérent automatique 
     private String genererNumeroAdherent() {
-        String maxNumero = adherentRepository.findMaxNumeroAdherent();
-        if (maxNumero == null) return "ADH-00001";
+        String max = adherentRepository.findMaxNumeroAdherent();
+        if (max == null) return "ADH-00001";
         try {
-            int num = Integer.parseInt(maxNumero.replace("ADH-", "")) + 1;
+            int num = Integer.parseInt(max.replace("ADH-", "")) + 1;
             return String.format("ADH-%05d", num);
         } catch (Exception e) {
-            return "ADH-" + String.format("%05d", adherentRepository.count() + 1);
+            return String.format("ADH-%05d", adherentRepository.count() + 1);
         }
     }
 
-    // Créer le compte utilisateur automatiquement
     private Utilisateur creerCompteUtilisateur(Adherent adherent) {
-        // Vérifier si l'email n'est pas déjà utilisé
-        if (utilisateurRepository.existsByEmail(adherent.getEmail())) {
+        if (utilisateurRepository.existsByEmail(adherent.getEmail()))
             return utilisateurRepository.findByEmail(adherent.getEmail()).orElse(null);
-        }
-        Utilisateur utilisateur = new Utilisateur();
-        utilisateur.setNom(adherent.getNom());
-        utilisateur.setPrenom(adherent.getPrenom());
-        utilisateur.setEmail(adherent.getEmail());
-        utilisateur.setActif(true);
-        utilisateur.setCompteConfigure(false);
-        return utilisateurRepository.save(utilisateur);
+        Utilisateur u = new Utilisateur();
+        u.setNom(adherent.getNom()); u.setPrenom(adherent.getPrenom());
+        u.setEmail(adherent.getEmail()); u.setActif(true); u.setCompteConfigure(false);
+        return utilisateurRepository.save(u);
     }
 
-    private void mapRequestToAdherent(AdherentDto.Request dto, Adherent adherent) {
-        adherent.setNom(dto.getNom());
-        adherent.setPrenom(dto.getPrenom());
-        adherent.setCin(dto.getCin());
-        adherent.setMatricule(dto.getMatricule());
-        adherent.setDateNaissance(dto.getDateNaissance());
-        adherent.setSituationFamiliale(dto.getSituationFamiliale());
-        adherent.setService(dto.getService());
-        adherent.setTelephone(dto.getTelephone());
-        adherent.setAdresse(dto.getAdresse());
-        adherent.setEmail(dto.getEmail());
-        adherent.setDateAdhesion(dto.getDateAdhesion() != null ? dto.getDateAdhesion() : LocalDate.now());
-        adherent.setNombreEnfants(dto.getNombreEnfants() != null ? dto.getNombreEnfants() : 0);
-        adherent.setObservations(dto.getObservations());
-
+    private void mapDtoToAdherent(AdherentDto.Request dto, Adherent a) {
+        a.setNom(dto.getNom()); a.setPrenom(dto.getPrenom());
+        a.setCin(dto.getCin()); a.setMatricule(dto.getMatricule());
+        a.setDateNaissance(dto.getDateNaissance());
+        a.setSituationFamiliale(dto.getSituationFamiliale());
+        a.setService(dto.getService()); a.setTelephone(dto.getTelephone());
+        a.setAdresse(dto.getAdresse()); a.setEmail(dto.getEmail());
+        a.setDateAdhesion(dto.getDateAdhesion() != null ? dto.getDateAdhesion() : LocalDate.now());
+        a.setNombreEnfants(dto.getNombreEnfants() != null ? dto.getNombreEnfants() : 0);
+        a.setObservations(dto.getObservations());
         if (dto.getStatut() != null) {
-            try {
-                adherent.setStatut(Adherent.StatutAdherent.valueOf(dto.getStatut().toUpperCase()));
-            } catch (IllegalArgumentException e) {
-                adherent.setStatut(Adherent.StatutAdherent.ACTIF);
-            }
+            try { a.setStatut(Adherent.StatutAdherent.valueOf(dto.getStatut().toUpperCase())); }
+            catch (IllegalArgumentException e) { a.setStatut(Adherent.StatutAdherent.ACTIF); }
         }
-
-        if (dto.getCategorieId() != null) {
-            CategorieAdhesion cat = categorieRepository.findById(dto.getCategorieId())
-                    .orElseThrow(() -> new RuntimeException("Catégorie introuvable: " + dto.getCategorieId()));
-            adherent.setCategorie(cat);
-        }
+        if (dto.getCategorieId() != null)
+            categorieRepository.findById(dto.getCategorieId()).ifPresent(a::setCategorie);
     }
 
-    AdherentDto.Response toResponse(Adherent a) {
-        AdherentDto.Response resp = new AdherentDto.Response();
-        resp.setId(a.getId());
-        resp.setNumeroAdherent(a.getNumeroAdherent());
-        resp.setNom(a.getNom());
-        resp.setPrenom(a.getPrenom());
-        resp.setCin(a.getCin());
-        resp.setMatricule(a.getMatricule());
-        resp.setDateNaissance(a.getDateNaissance());
-        resp.setSituationFamiliale(a.getSituationFamiliale());
-        resp.setService(a.getService());
-        resp.setTelephone(a.getTelephone());
-        resp.setAdresse(a.getAdresse());
-        resp.setEmail(a.getEmail());
-        resp.setDateAdhesion(a.getDateAdhesion());
-        resp.setStatut(a.getStatut() != null ? a.getStatut().name() : null);
-        resp.setNombreEnfants(a.getNombreEnfants());
-        resp.setObservations(a.getObservations());
-        resp.setDateCreation(a.getDateCreation());
-
+    public AdherentDto.Response toResponse(Adherent a) {
+        AdherentDto.Response r = new AdherentDto.Response();
+        r.setId(a.getId()); r.setNumeroAdherent(a.getNumeroAdherent());
+        r.setNom(a.getNom()); r.setPrenom(a.getPrenom());
+        r.setCin(a.getCin()); r.setMatricule(a.getMatricule());
+        r.setDateNaissance(a.getDateNaissance());
+        r.setSituationFamiliale(a.getSituationFamiliale());
+        r.setService(a.getService()); r.setTelephone(a.getTelephone());
+        r.setAdresse(a.getAdresse()); r.setEmail(a.getEmail());
+        r.setDateAdhesion(a.getDateAdhesion());
+        r.setStatut(a.getStatut() != null ? a.getStatut().name() : null);
+        r.setNombreEnfants(a.getNombreEnfants());
+        r.setObservations(a.getObservations());
+        r.setDateCreation(a.getDateCreation());
+        r.setPhotoChemin(a.getPhotoChemin() != null ? "/api/adherents/" + a.getId() + "/photo" : null);
         if (a.getCategorie() != null) {
             CategorieAdhesionDto.Response cat = new CategorieAdhesionDto.Response();
-            cat.setId(a.getCategorie().getId());
-            cat.setLibelle(a.getCategorie().getLibelle());
-            cat.setMontant(a.getCategorie().getMontant());
-            cat.setActif(a.getCategorie().getActif());
-            resp.setCategorie(cat);
+            cat.setId(a.getCategorie().getId()); cat.setLibelle(a.getCategorie().getLibelle());
+            cat.setMontant(a.getCategorie().getMontant()); cat.setActif(a.getCategorie().getActif());
+            r.setCategorie(cat);
         }
-
         if (a.getUtilisateur() != null) {
-            resp.setUtilisateurId(a.getUtilisateur().getId());
-            resp.setCompteUtilisateurCree(true);
+            r.setUtilisateurId(a.getUtilisateur().getId());
+            r.setCompteUtilisateurCree(true);
         }
-
-        return resp;
+        return r;
     }
 }

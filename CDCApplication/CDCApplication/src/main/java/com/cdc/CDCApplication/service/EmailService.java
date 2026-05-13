@@ -21,17 +21,19 @@ public class EmailService {
         this.mailSender = mailSender;
     }
 
+    public JavaMailSender getMailSender() {
+        return mailSender;
+    }
+
     public void envoyerEmailCreationCompte(String destinataire, String nom, String prenom, String token) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
             helper.setFrom(emailFrom);
             helper.setTo(destinataire);
             helper.setSubject("CDCApplication - Creation de votre compte");
 
             String lien = frontendUrl + "/configurer-mot-de-passe?token=" + token;
-
             String html =
                 "<!DOCTYPE html><html><head><meta charset='UTF-8'></head><body>" +
                 "<div style='font-family:Arial,sans-serif;max-width:600px;margin:40px auto;background:white;border-radius:8px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.1)'>" +
@@ -46,8 +48,8 @@ public class EmailService {
                 "<div style='text-align:center;margin:30px 0'>" +
                 "<a href='" + lien + "' style='background:#1a73e8;color:white;padding:14px 32px;text-decoration:none;border-radius:6px;font-weight:bold;display:inline-block'>Configurer mon mot de passe</a>" +
                 "</div>" +
-                "<div style='background:#e3f2fd;border-left:4px solid #1a73e8;padding:15px;margin:20px 0;border-radius:4px'>" +
-                "<strong>Important :</strong> Ce lien est valable 24 heures." +
+                "<div style='background:#e3f2fd;border-left:4px solid #1a73e8;padding:15px;border-radius:4px'>" +
+                "<strong>Important :</strong> Ce lien est valable 72 heures." +
                 "</div>" +
                 "</div>" +
                 "<div style='text-align:center;padding:20px;background:#f8f9fa;color:#999;font-size:12px'>CDCApplication</div>" +
@@ -55,7 +57,6 @@ public class EmailService {
 
             helper.setText(html, true);
             mailSender.send(message);
-
         } catch (Exception e) {
             throw new RuntimeException("Erreur envoi email : " + e.getMessage(), e);
         }

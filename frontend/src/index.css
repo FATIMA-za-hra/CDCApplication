@@ -164,3 +164,97 @@
 }
 .cdc-auth-title { font-size: 21px; font-weight: 700; color: #0f172a; text-align: center; margin-bottom: 6px; }
 .cdc-auth-subtitle { font-size: 13px; color: #64748b; text-align: center; margin-bottom: 24px; line-height: 1.5; }
+
+/* ══════════════════════════════════════════════
+   À AJOUTER À LA FIN de votre index.css existant
+   ══════════════════════════════════════════════ */
+
+/* ── RESPONSIVE ── */
+
+/* Tablette (≤ 1024px) — sidebar réduite automatiquement */
+@media (max-width: 1024px) {
+  .cdc-sidebar { width: 60px; }
+  .cdc-sidebar .cdc-nav-label,
+  .cdc-sidebar .cdc-logo-text { display: none; }
+  .cdc-main { margin-left: 60px; }
+  .cdc-main.collapsed { margin-left: 60px; }
+  .cdc-content { padding: 18px; }
+}
+
+/* Mobile (≤ 768px) — sidebar masquée avec overlay */
+@media (max-width: 768px) {
+  .cdc-sidebar {
+    transform: translateX(-100%);
+    width: 240px !important;
+    transition: transform 0.25s ease, width 0.25s;
+  }
+  .cdc-sidebar.mobile-open {
+    transform: translateX(0);
+  }
+  .cdc-sidebar.mobile-open .cdc-nav-label,
+  .cdc-sidebar.mobile-open .cdc-logo-text { display: block; }
+  .cdc-sidebar.mobile-open .cdc-nav-section-label { opacity: 1; }
+
+  .cdc-main { margin-left: 0 !important; }
+  .cdc-content { padding: 12px; }
+
+  .cdc-page-header { flex-direction: column; align-items: stretch; }
+  .cdc-topbar { padding: 0 14px; }
+  .cdc-page-title { font-size: 14px; }
+
+  /* Overlay sombre derrière la sidebar mobile */
+  .sidebar-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.45);
+    z-index: 99;
+  }
+
+  /* Cacher certaines colonnes tableau sur mobile */
+  .cdc-hide-mobile { display: none !important; }
+
+  /* Dialogs plein écran sur mobile */
+  .p-dialog { width: 96vw !important; max-height: 92vh; }
+
+  /* Formulaires en colonne sur mobile */
+  .formgrid.grid { flex-direction: column !important; }
+  .formgrid.grid .field.col { width: 100% !important; }
+
+  /* Boutons groupés responsive */
+  .cdc-page-header .flex { flex-wrap: wrap; }
+}
+
+/* Très petit mobile (≤ 480px) */
+@media (max-width: 480px) {
+  .cdc-content { padding: 8px; }
+  .cdc-card { border-radius: 6px; }
+  .cdc-topbar { padding: 0 10px; }
+
+  /* Stats en 2 colonnes */
+  div[style*="grid-template-columns"][style*="155px"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  /* Tableaux : scroll horizontal */
+  .p-datatable-wrapper { overflow-x: auto; }
+  .p-datatable { min-width: 500px; }
+}
+
+/* ── PIÈCES JUSTIFICATIVES — bouton consulter PDF ── */
+.btn-consulter-pdf {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── CARTE PVC aperçu ── */
+.carte-pvc-apercu {
+  box-shadow: 0 8px 32px rgba(0,0,0,.25);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* ── TIMELINE historique ── */
+.p-timeline .p-timeline-event-content {
+  padding-bottom: 12px;
+}
