@@ -15,6 +15,9 @@ import ProfilPage from './pages/ProfilPage'
 import AidePage from './pages/AidePage'
 import TypeAidePage from './pages/TypeAidePage'
 import MonEspaceAidePage from './pages/MonEspaceAidePage'
+import MesAdhesionsPage from './pages/MesAdhesionsPage'
+import CaissePage from './pages/CaissePage'
+import VirementPage from './pages/VirementPage'
 
 export default function App() {
   return (
@@ -38,11 +41,14 @@ export default function App() {
           <Route path="/types-aide"           element={<TypeAidePage />} />
           {/* Aide sociale — espace adhérent (self-service) */}
           <Route path="/mon-espace-aide"      element={<MonEspaceAidePage />} />
+          <Route path="/mes-adhesions"          element={<MesAdhesionsPage />} />
           {/* Accès */}
           <Route path="/utilisateurs"         element={<UtilisateursPage />} />
           <Route path="/roles"                element={<RolesPage />} />
           <Route path="/privileges"           element={<PrivilegesPage />} />
           <Route path="/profil"               element={<ProfilPage />} />
+          <Route path="/caisse"               element={<CaissePage />} />
+          <Route path="/virements"             element={<VirementPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />

@@ -6,211 +6,188 @@ import { Dialog } from 'primereact/dialog'
 import { InputText } from 'primereact/inputtext'
 import { InputNumber } from 'primereact/inputnumber'
 import { InputTextarea } from 'primereact/inputtextarea'
-import { Calendar } from 'primereact/calendar'
-import { ToggleButton } from 'primereact/togglebutton'
 import { Toast } from 'primereact/toast'
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog'
+import { Tag } from 'primereact/tag'
 import { IconField } from 'primereact/iconfield'
 import { InputIcon } from 'primereact/inputicon'
 import { categorieApi } from '../services/api'
 
-const EMPTY = {
-  libelle: '', montant: null, conditions: '', actif: true,
-  dateDebutValidite: null, dateFinValidite: null, description: ''
-}
+const EMPTY = { libelle: '', montant: null, conditions: '', periodesValidite: '', actif: true }
 
 export default function CategoriesAdhesionPage() {
   const [categories, setCategories] = useState([])
   const [loading, setLoading]       = useState(true)
-  const [dialogVisible, setDialog]  = useState(false)
-  const [form, setForm]             = useState(EMPTY)
+  const [dialog, setDialog]         = useState(false)
   const [editId, setEditId]         = useState(null)
+  const [form, setForm]             = useState(EMPTY)
   const [saving, setSaving]         = useState(false)
   const [search, setSearch]         = useState('')
   const toast = useRef(null)
 
   const load = async () => {
     setLoading(true)
-    try {
-      const res = await categorieApi.getAll()
-      setCategories(res.data)
-    } catch {
-      toast.current?.show({ severity: 'error', summary: 'Erreur', detail: 'Chargement impossible', life: 3000 })
-    } finally { setLoading(false) }
+    try { const r = await categorieApi.getAll(); setCategories(r.data) }
+    catch { toast.current?.show({ severity: 'error', summary: 'Erreur', detail: 'Chargement impossible', life: 3000 }) }
+    finally { setLoading(false) }
   }
 
   useEffect(() => { load() }, [])
 
-  const filtered = categories.filter(c => {
-    if (!search.trim()) return true
-    const q = search.toLowerCase()
-    return c.libelle?.toLowerCase().includes(q) || c.description?.toLowerCase().includes(q)
-  })
-
   const openNew = () => { setForm(EMPTY); setEditId(null); setDialog(true) }
   const openEdit = row => {
-    setForm({
-      libelle: row.libelle,
-      montant: row.montant,
-      conditions: row.conditions || '',
-      actif: row.actif,
-      dateDebutValidite: row.dateDebutValidite ? new Date(row.dateDebutValidite) : null,
-      dateFinValidite: row.dateFinValidite ? new Date(row.dateFinValidite) : null,
-      description: row.description || ''
-    })
+    setForm({ libelle: row.libelle || '', montant: row.montant || null,
+      conditions: row.conditions || '', periodesValidite: row.periodesValidite || '',
+      actif: row.actif !== false })
     setEditId(row.id); setDialog(true)
   }
 
   const save = async () => {
-    if (!form.libelle || !form.montant) {
-      toast.current?.show({ severity: 'warn', summary: 'Attention', detail: 'Libellé et montant obligatoires', life: 3000 })
-      return
+    if (!form.libelle?.trim()) {
+      toast.current?.show({ severity: 'warn', summary: 'Attention', detail: 'Libellé obligatoire', life: 3000 }); return
     }
     setSaving(true)
     try {
-      const payload = {
-        ...form,
-        dateDebutValidite: form.dateDebutValidite ? form.dateDebutValidite.toISOString().split('T')[0] : null,
-        dateFinValidite: form.dateFinValidite ? form.dateFinValidite.toISOString().split('T')[0] : null
-      }
-      if (editId) {
-        await categorieApi.update(editId, payload)
-        toast.current?.show({ severity: 'success', summary: 'Succès', detail: 'Catégorie modifiée', life: 3000 })
-      } else {
-        await categorieApi.create(payload)
-        toast.current?.show({ severity: 'success', summary: 'Succès', detail: 'Catégorie créée', life: 3000 })
-      }
+      if (editId) await categorieApi.update(editId, form)
+      else        await categorieApi.create(form)
+      toast.current?.show({ severity: 'success', summary: 'Succès',
+        detail: editId ? 'Catégorie modifiée' : 'Catégorie créée', life: 3000 })
       setDialog(false); load()
     } catch (e) {
-      toast.current?.show({ severity: 'error', summary: 'Erreur', detail: e.response?.data?.message || 'Erreur', life: 4000 })
+      toast.current?.show({ severity: 'error', summary: 'Erreur',
+        detail: e.response?.data?.message || 'Erreur', life: 4000 })
     } finally { setSaving(false) }
   }
 
-  const confirmDelete = row => {
-    confirmDialog({
-      message: `Supprimer la catégorie "${row.libelle}" ?`,
-      header: 'Confirmation', icon: 'pi pi-exclamation-triangle',
-      acceptLabel: 'Supprimer', rejectLabel: 'Annuler', acceptClassName: 'p-button-danger',
-      accept: async () => {
-        try {
-          await categorieApi.delete(row.id)
-          toast.current?.show({ severity: 'success', summary: 'Supprimé', life: 3000 })
-          load()
-        } catch (e) {
-          toast.current?.show({ severity: 'error', summary: 'Erreur', detail: e.response?.data?.message || 'Erreur', life: 4000 })
-        }
+  const toggleActif = row => confirmDialog({
+    message: `${row.actif ? 'Désactiver' : 'Réactiver'} la catégorie "${row.libelle}" ?`,
+    header: 'Confirmation', icon: 'pi pi-exclamation-triangle',
+    acceptLabel: row.actif ? 'Désactiver' : 'Réactiver', rejectLabel: 'Annuler',
+    acceptClassName: row.actif ? 'p-button-warning' : 'p-button-success',
+    accept: async () => {
+      try {
+        await categorieApi.update(row.id, { ...row, actif: !row.actif })
+        toast.current?.show({ severity: 'success', summary: 'Modifié', life: 3000 })
+        load()
+      } catch (e) {
+        toast.current?.show({ severity: 'error', summary: 'Erreur',
+          detail: e.response?.data?.message || 'Erreur', life: 4000 })
       }
-    })
-  }
+    }
+  })
 
-  // Statut : texte simple sans couleur
-  const actifTpl = row => <span>{row.actif ? 'Active' : 'Inactive'}</span>
+  const supprimer = row => confirmDialog({
+    message: `Supprimer la catégorie "${row.libelle}" ?`,
+    header: 'Confirmation', icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Supprimer', rejectLabel: 'Annuler', acceptClassName: 'p-button-danger',
+    accept: async () => {
+      try {
+        await categorieApi.delete(row.id)
+        toast.current?.show({ severity: 'success', summary: 'Supprimée', life: 3000 })
+        load()
+      } catch (e) {
+        toast.current?.show({ severity: 'error', summary: 'Erreur',
+          detail: e.response?.data?.message || 'Impossible de supprimer', life: 4000 })
+      }
+    }
+  })
 
-  // Montant : texte simple
-  const montantTpl = row => (
-    <span>{Number(row.montant).toLocaleString('fr-MA')} MAD</span>
+  const filtered = categories.filter(c =>
+    !search.trim() ||
+    c.libelle?.toLowerCase().includes(search.toLowerCase()) ||
+    c.conditions?.toLowerCase().includes(search.toLowerCase())
   )
 
-  // Adhérents : texte simple sans couleur
-  const adherentsTpl = row => (
-    <span>{row.nombreAdherents}</span>
+  const statutTpl = row => (
+    <Tag value={row.actif !== false ? 'Active' : 'Inactive'}
+      severity={row.actif !== false ? 'success' : 'secondary'} />
   )
+
+  const montantTpl = row => row.montant != null
+    ? <span style={{ fontWeight: 600 }}>{Number(row.montant).toLocaleString('fr-MA')} MAD</span>
+    : <span style={{ color: '#94a3b8' }}>—</span>
 
   const actionsTpl = row => (
-    <div className="flex gap-2">
-      <Button icon="pi pi-pencil" label="Modifier"  size="small" outlined onClick={() => openEdit(row)} />
-      <Button icon="pi pi-trash"  label="Supprimer" size="small" outlined severity="danger" onClick={() => confirmDelete(row)} />
+    <div className="flex gap-1">
+      <Button icon="pi pi-pencil" size="small" outlined
+        tooltip="Modifier" tooltipOptions={{ position: 'top' }}
+        onClick={() => openEdit(row)} />
+      <Button
+        icon={row.actif !== false ? 'pi pi-ban' : 'pi pi-check'}
+        size="small" outlined
+        severity={row.actif !== false ? 'warning' : 'success'}
+        tooltip={row.actif !== false ? 'Désactiver' : 'Réactiver'}
+        tooltipOptions={{ position: 'top' }}
+        onClick={() => toggleActif(row)} />
+      <Button icon="pi pi-trash" size="small" outlined severity="danger"
+        tooltip="Supprimer" tooltipOptions={{ position: 'top' }}
+        onClick={() => supprimer(row)} />
     </div>
   )
 
   return (
     <div>
-      <Toast ref={toast} />
-      <ConfirmDialog />
+      <Toast ref={toast} /><ConfirmDialog />
 
       <div className="cdc-page-header">
-        <div>
-          <h1>Catégories d'Adhésion</h1>
-          <p>Paramétrez les catégories et leurs montants de cotisation</p>
-        </div>
+        <div><h1>Catégories d'Adhésion</h1><p>Gérez les catégories et leurs montants</p></div>
         <Button icon="pi pi-plus" label="Nouvelle Catégorie" onClick={openNew} />
       </div>
 
       <div className="cdc-card">
-        <DataTable
-          value={filtered} loading={loading}
-          emptyMessage="Aucune catégorie."
-          paginator rows={10}
+        <DataTable value={filtered} loading={loading} emptyMessage="Aucune catégorie."
+          paginator rows={15} rowsPerPageOptions={[10, 15, 30]}
           header={
             <div className="flex justify-content-between align-items-center">
               <span>{categories.length} catégorie(s)</span>
               <IconField iconPosition="left">
                 <InputIcon className="pi pi-search" />
-                <InputText value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher..." />
+                <InputText value={search} onChange={e => setSearch(e.target.value)}
+                  placeholder="Rechercher..." />
               </IconField>
             </div>
-          }
-        >
-          <Column field="libelle"         header="Libellé"     sortable style={{ fontWeight: 600 }} />
-          <Column header="Montant"        body={montantTpl}    style={{ width: 150 }} />
-          <Column field="description"     header="Description" />
-          <Column header="Adhérents"      body={adherentsTpl}  style={{ width: 130 }} />
-          <Column header="Statut"         body={actifTpl}      style={{ width: 100 }} />
-          <Column header="Actions"        body={actionsTpl}    style={{ width: 230 }} />
+          }>
+          {/* Pas de colonne "Adhérents" */}
+          <Column field="libelle"          header="Libellé"     sortable style={{ fontWeight: 600 }} />
+          <Column header="Montant"         body={montantTpl}    style={{ width: 140 }} />
+          <Column field="conditions"       header="Conditions"  style={{ color: '#64748b', fontSize: 12 }} />
+          <Column field="periodesValidite" header="Périodes"    style={{ color: '#64748b', fontSize: 12, width: 130 }} />
+          <Column header="Statut"          body={statutTpl}     style={{ width: 100 }} />
+          <Column header="Actions"         body={actionsTpl}    style={{ width: 120 }} />
         </DataTable>
       </div>
 
-      <Dialog
-        visible={dialogVisible} onHide={() => setDialog(false)}
+      <Dialog visible={dialog} onHide={() => setDialog(false)}
         header={editId ? 'Modifier la catégorie' : 'Nouvelle catégorie'}
-        style={{ width: 560 }} modal
+        style={{ width: 500 }} modal
         footer={
           <div>
             <Button icon="pi pi-times" label="Annuler" outlined onClick={() => setDialog(false)} className="mr-2" />
             <Button icon="pi pi-check" label={editId ? 'Modifier' : 'Créer'} loading={saving} onClick={save} />
           </div>
-        }
-      >
+        }>
         <div className="flex flex-column gap-3 pt-3">
-          <div className="formgrid grid">
-            <div className="field col">
-              <label className="font-semibold">Libellé *</label>
-              <InputText value={form.libelle} onChange={e => setForm({ ...form, libelle: e.target.value })}
-                placeholder="Ex: Actifs, Retraités..." className="w-full" autoFocus />
-            </div>
-            <div className="field col">
-              <label className="font-semibold">Montant (MAD) *</label>
-              <InputNumber value={form.montant} onValueChange={e => setForm({ ...form, montant: e.value })}
-                mode="decimal" minFractionDigits={2} maxFractionDigits={2} className="w-full" placeholder="0.00" />
-            </div>
+          <div className="field">
+            <label className="font-semibold">Libellé *</label>
+            <InputText value={form.libelle} onChange={e => setForm({...form, libelle: e.target.value})}
+              className="w-full" placeholder="Ex: Actif - Échelle 11" autoFocus />
           </div>
           <div className="field">
-            <label className="font-semibold">Description</label>
-            <InputText value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
-              placeholder="Description courte..." className="w-full" />
+            <label className="font-semibold">Montant (MAD)</label>
+            <InputNumber value={form.montant} onValueChange={e => setForm({...form, montant: e.value})}
+              mode="decimal" minFractionDigits={2} className="w-full" />
           </div>
           <div className="field">
-            <label className="font-semibold">Conditions d'appartenance</label>
-            <InputTextarea value={form.conditions} onChange={e => setForm({ ...form, conditions: e.target.value })}
-              placeholder="Conditions pour appartenir à cette catégorie..."
+            <label className="font-semibold">Conditions d'éligibilité</label>
+            <InputTextarea value={form.conditions}
+              onChange={e => setForm({...form, conditions: e.target.value})}
               rows={2} className="w-full" autoResize />
           </div>
-          <div className="formgrid grid">
-            <div className="field col">
-              <label className="font-semibold">Date début validité</label>
-              <Calendar value={form.dateDebutValidite} onChange={e => setForm({ ...form, dateDebutValidite: e.value })}
-                dateFormat="dd/mm/yy" showIcon className="w-full" placeholder="JJ/MM/AAAA" />
-            </div>
-            <div className="field col">
-              <label className="font-semibold">Date fin validité</label>
-              <Calendar value={form.dateFinValidite} onChange={e => setForm({ ...form, dateFinValidite: e.value })}
-                dateFormat="dd/mm/yy" showIcon className="w-full" placeholder="JJ/MM/AAAA" />
-            </div>
-          </div>
           <div className="field">
-            <label className="font-semibold">Statut</label>
-            <ToggleButton checked={form.actif} onChange={e => setForm({ ...form, actif: e.value })}
-              onLabel="Active" offLabel="Inactive" onIcon="pi pi-check" offIcon="pi pi-times" className="w-full" />
+            <label className="font-semibold">Périodes de validité</label>
+            <InputText value={form.periodesValidite}
+              onChange={e => setForm({...form, periodesValidite: e.target.value})}
+              className="w-full" placeholder="Ex: Annuelle" />
           </div>
         </div>
       </Dialog>

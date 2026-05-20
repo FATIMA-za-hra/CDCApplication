@@ -27,9 +27,9 @@ const ETATS = [
   { label: 'Annulée',   value: 'ANNULEE',   severity: 'secondary'},
 ]
 
-const EMPTY_FORM     = { adherentId: null, typeAideId: null, montantDemande: null, motif: '' }
+const EMPTY_FORM     = { adherentId: null, typeAideId: null, montantDemande: null }
 const EMPTY_DECISION = { decision: '', commentaire: '', montantAccorde: null }
-const EMPTY_VIREMENT = { beneficiaire: '', montant: null, motif: '', referenceVirement: '', dateVirement: null, ribBeneficiaire: '' }
+const EMPTY_VIREMENT = { adherentId: null, beneficiaire: '', montant: null, referenceVirement: '', dateVirement: null, ribBeneficiaire: '' }
 
 export default function AidePage() {
   const [aides, setAides]               = useState([])
@@ -92,8 +92,8 @@ export default function AidePage() {
   })
 
   const deposer = async () => {
-    if (!form.adherentId || !form.typeAideId || !form.montantDemande || !form.motif?.trim()) {
-      toast.current?.show({ severity: 'warn', summary: 'Attention', detail: 'Tous les champs sont obligatoires', life: 3000 }); return
+    if (!form.adherentId || !form.typeAideId || !form.montantDemande) {
+      toast.current?.show({ severity: 'warn', summary: 'Attention', detail: 'Adhérent, type et montant sont obligatoires', life: 3000 }); return
     }
     setSaving(true)
     try {
@@ -484,8 +484,7 @@ export default function AidePage() {
                 ))}
               </div>
               <div style={{ marginTop: 16, background: '#f8fafc', borderRadius: 8, padding: 14 }}>
-                <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 6 }}>Motif</div>
-                <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7 }}>{selected.motif}</div>
+
               </div>
             </TabPanel>
 
@@ -706,11 +705,35 @@ export default function AidePage() {
             padding: 12, fontSize: 13, color: '#15803d' }}>
             Montant accordé : <strong>{Number(selected?.montantAccorde||0).toLocaleString('fr-MA')} MAD</strong>
           </div>
+          <div className="field">
+            <label className="font-semibold">Bénéficiaire (Adhérent) *</label>
+            <Dropdown
+              value={virementForm.adherentId}
+              options={adherents.map(a => ({
+                label: `${a.prenom} ${a.nom}${a.numeroAdherent ? ' — ' + a.numeroAdherent : ''}${a.rib ? ' — RIB: ' + a.rib : ''}`,
+                value: a.id
+              }))}
+              onChange={e => {
+                const adh = adherents.find(a => a.id === e.value)
+                setVirementForm({
+                  ...virementForm,
+                  adherentId: e.value,
+                  beneficiaire: adh ? `${adh.prenom} ${adh.nom}` : '',
+                  ribBeneficiaire: adh?.rib || ''
+                })
+              }}
+              placeholder="Sélectionner un adhérent..."
+              filter showClear filterPlaceholder="Rechercher..."
+              className="w-full"
+            />
+          </div>
           <div className="formgrid grid">
             <div className="field col">
-              <label className="font-semibold">Bénéficiaire *</label>
-              <InputText value={virementForm.beneficiaire}
-                onChange={e => setVirementForm({...virementForm, beneficiaire: e.target.value})} className="w-full" />
+              <label className="font-semibold">RIB (auto-rempli)</label>
+              <InputText value={virementForm.ribBeneficiaire}
+                onChange={e => setVirementForm({...virementForm, ribBeneficiaire: e.target.value})}
+                placeholder="RIB automatique depuis le profil adhérent"
+                className="w-full" />
             </div>
             <div className="field col">
               <label className="font-semibold">Montant (MAD) *</label>
@@ -718,12 +741,6 @@ export default function AidePage() {
                 onValueChange={e => setVirementForm({...virementForm, montant: e.value})}
                 mode="decimal" minFractionDigits={2} className="w-full" />
             </div>
-          </div>
-          <div className="field">
-            <label className="font-semibold">RIB Bénéficiaire</label>
-            <InputText value={virementForm.ribBeneficiaire}
-              onChange={e => setVirementForm({...virementForm, ribBeneficiaire: e.target.value})}
-              placeholder="024 XXXX XXXXXXXXXX XX" className="w-full" />
           </div>
           <div className="formgrid grid">
             <div className="field col">
@@ -738,11 +755,7 @@ export default function AidePage() {
                 dateFormat="dd/mm/yy" showIcon className="w-full" />
             </div>
           </div>
-          <div className="field">
-            <label className="font-semibold">Motif</label>
-            <InputText value={virementForm.motif}
-              onChange={e => setVirementForm({...virementForm, motif: e.target.value})} className="w-full" />
-          </div>
+
         </div>
       </Dialog>
     </div>

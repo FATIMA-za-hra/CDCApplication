@@ -10,6 +10,7 @@ public class Privilege {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // Format: MODELE_ACTION  ex: ADHERENT_READ, ADHESION_CREATE
     @Column(nullable = false, unique = true)
     private String nom;
 
@@ -20,10 +21,8 @@ public class Privilege {
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
-
     public String getNom() { return nom; }
     public void setNom(String nom) { this.nom = nom; }
-
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
 }

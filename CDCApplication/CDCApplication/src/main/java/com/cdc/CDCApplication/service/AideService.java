@@ -19,12 +19,13 @@ import java.util.*;
 @Transactional
 public class AideService {
 
-    private final AideRepository aideRepository;
-    private final AdherentRepository adherentRepository;
-    private final TypeAideRepository typeAideRepository;
+    private final AideRepository              aideRepository;
+    private final AdherentRepository          adherentRepository;
+    private final TypeAideRepository          typeAideRepository;
     private final WorkflowValidationRepository workflowRepository;
-    private final VirementRepository virementRepository;
-    private final UtilisateurRepository utilisateurRepository;
+    private final VirementRepository          virementRepository;
+    private final UtilisateurRepository       utilisateurRepository;
+    private final EmailService                emailService;
 
     @Value("${app.aides.dir:./uploads/aides}")
     private String aidesDir;
@@ -34,18 +35,18 @@ public class AideService {
                         TypeAideRepository typeAideRepository,
                         WorkflowValidationRepository workflowRepository,
                         VirementRepository virementRepository,
-                        UtilisateurRepository utilisateurRepository) {
-        this.aideRepository       = aideRepository;
-        this.adherentRepository   = adherentRepository;
-        this.typeAideRepository   = typeAideRepository;
-        this.workflowRepository   = workflowRepository;
-        this.virementRepository   = virementRepository;
+                        UtilisateurRepository utilisateurRepository,
+                        EmailService emailService) {
+        this.aideRepository        = aideRepository;
+        this.adherentRepository    = adherentRepository;
+        this.typeAideRepository    = typeAideRepository;
+        this.workflowRepository    = workflowRepository;
+        this.virementRepository    = virementRepository;
         this.utilisateurRepository = utilisateurRepository;
+        this.emailService          = emailService;
     }
 
-    // ═══════════════════════════════
-    // LECTURE
-    // ═══════════════════════════════
+    // ═══ LECTURE ═══
 
     @Transactional(readOnly = true)
     public List<AideDto.Response> findAll() {
@@ -61,112 +62,86 @@ public class AideService {
         return list;
     }
 
-    /**
-     * Retourne les demandes du compte connecté (adhérent qui consulte ses propres demandes)
-     */
-    @Transactional(readOnly = true)
-    public List<AideDto.Response> findMesDemandes() {
-        String email = getCurrentUser();
-        // Trouver l'adhérent lié à cet utilisateur
-        Utilisateur u = utilisateurRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Utilisateur introuvable"));
-        Adherent adherent = adherentRepository.findByUtilisateurId(u.getId())
-                .orElseThrow(() -> new RuntimeException("Aucun profil adherent lie a ce compte."));
-        List<AideDto.Response> list = new ArrayList<>();
-        for (Aide a : aideRepository.findByAdherentIdOrderByDateDemandeDesc(adherent.getId()))
-            list.add(toResponse(a));
-        return list;
-    }
-
     @Transactional(readOnly = true)
     public AideDto.Response findById(Long id) {
         return toResponse(aideRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Aide introuvable")));
     }
 
-    // ═══════════════════════════════
-    // DÉPOSER — deux modes :
-    //   1. Admin/Agent : fournit adherentId dans le body
-    //   2. Adhérent connecté : adherentId = null → déduit depuis le compte
-    // ═══════════════════════════════
+    @Transactional(readOnly = true)
+    public List<AideDto.Response> findMesDemandes() {
+        String email = getCurrentUserEmail();
+        Utilisateur u = utilisateurRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Utilisateur introuvable"));
+        Adherent adherent = adherentRepository.findByUtilisateurId(u.getId())
+                .orElseThrow(() -> new RuntimeException("Aucun profil adherent lie a ce compte."));
+        return findByAdherent(adherent.getId());
+    }
+
+    // ═══ DÉPOSER ═══
 
     public AideDto.Response deposer(AideDto.Request dto) {
         Adherent adherent;
 
         if (dto.getAdherentId() != null) {
-            // Mode admin / agent de gestion
             adherent = adherentRepository.findById(dto.getAdherentId())
                     .orElseThrow(() -> new RuntimeException("Adherent introuvable"));
         } else {
-            // Mode adhérent connecté → retrouver via le compte utilisateur
-            String email = getCurrentUser();
+            String email = getCurrentUserEmail();
             Utilisateur u = utilisateurRepository.findByEmail(email)
-                    .orElseThrow(() -> new RuntimeException("Compte utilisateur introuvable"));
+                    .orElseThrow(() -> new RuntimeException("Compte introuvable"));
             adherent = adherentRepository.findByUtilisateurId(u.getId())
                     .orElseThrow(() -> new RuntimeException(
-                        "Aucun profil adherent lie a votre compte. Contactez l'administration."));
-
+                        "Aucun profil adherent lie a votre compte."));
             if (adherent.getStatut() != Adherent.StatutAdherent.ACTIF)
-                throw new RuntimeException("Votre compte adherent n'est pas actif.");
+                throw new RuntimeException("Votre compte adherent n est pas actif.");
         }
 
         TypeAide typeAide = typeAideRepository.findById(dto.getTypeAideId())
-                .orElseThrow(() -> new RuntimeException("Type d'aide introuvable"));
-
+                .orElseThrow(() -> new RuntimeException("Type d aide introuvable"));
         if (!typeAide.getActif())
-            throw new RuntimeException("Ce type d'aide n'est plus actif.");
-
+            throw new RuntimeException("Ce type d aide n est plus actif.");
         if (typeAide.getMontantMax() != null
                 && dto.getMontantDemande().compareTo(typeAide.getMontantMax()) > 0)
-            throw new RuntimeException("Le montant depasse le plafond autorise de "
+            throw new RuntimeException("Le montant depasse le plafond de "
                 + typeAide.getMontantMax() + " MAD.");
+
+        // Nom+Prénom du saisisseur (pas l'email)
+        String saisiPar = getCurrentUserNomPrenom();
 
         Aide aide = new Aide();
         aide.setNumeroDemande(genererNumeroDemande());
         aide.setAdherent(adherent);
         aide.setTypeAide(typeAide);
         aide.setMontantDemande(dto.getMontantDemande());
-        aide.setMotif(dto.getMotif());
         aide.setEtat(Aide.EtatAide.DEPOSEE);
         aide.setDateDemande(LocalDate.now());
-        aide.setSaisiPar(getCurrentUser());
-
-        // Créer le dossier pour les pièces jointes
-        String num = aide.getNumeroDemande();
-        aide.setPiecesJointesDir(Paths.get(aidesDir, num).toAbsolutePath().toString());
+        aide.setSaisiPar(saisiPar); // Nom Prénom
+        aide.setPiecesJointesDir(Paths.get(aidesDir, aide.getNumeroDemande()).toAbsolutePath().toString());
 
         Aide saved = aideRepository.save(aide);
         creerWorkflow(saved);
         return toResponse(saved);
     }
 
-    // ═══════════════════════════════
-    // ANNULER
-    // Un adhérent peut annuler sa propre demande si elle est encore DEPOSEE
-    // ═══════════════════════════════
+    // ═══ ANNULER ═══
 
     public AideDto.Response annuler(Long id) {
         Aide aide = aideRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Aide introuvable"));
-
-        // Vérifier si c'est bien la demande de l'adhérent connecté ou un admin
         verifierDroitAcces(aide);
-
         if (aide.getEtat() != Aide.EtatAide.DEPOSEE)
             throw new RuntimeException("Seule une demande DEPOSEE peut etre annulee.");
         aide.setEtat(Aide.EtatAide.ANNULEE);
         return toResponse(aideRepository.save(aide));
     }
 
-    // ═══════════════════════════════
-    // DÉCISION AGENT DE BUREAU (étape 1)
-    // ═══════════════════════════════
+    // ═══ DÉCISION AGENT DE BUREAU ═══
 
     public AideDto.Response decisionAgentBureau(Long aideId, AideDto.DecisionRequest req) {
         Aide aide = getAideActive(aideId);
-
         if (aide.getEtat() != Aide.EtatAide.DEPOSEE)
-            throw new RuntimeException("La demande doit etre DEPOSEE. Etat actuel: " + aide.getEtat());
+            throw new RuntimeException("La demande doit etre DEPOSEE. Etat: " + aide.getEtat());
 
         WorkflowValidation wf = workflowRepository
                 .findByAideIdAndEtape(aideId, WorkflowValidation.Etape.AGENT_BUREAU)
@@ -177,7 +152,7 @@ public class AideService {
         wf.setDecision(decision);
         wf.setDateDecision(LocalDateTime.now());
         wf.setCommentaire(req.getCommentaire());
-        wf.setValidePar(getCurrentUser());
+        wf.setValidePar(getCurrentUserNomPrenom()); // Nom Prénom
 
         if (decision == WorkflowValidation.Decision.APPROUVE) {
             java.math.BigDecimal montant = req.getMontantAccorde() != null
@@ -188,27 +163,25 @@ public class AideService {
         } else {
             aide.setEtat(Aide.EtatAide.REJETEE);
             aide.setDateTraitement(LocalDate.now());
+            envoyerNotificationAideRejetee(aide, req.getCommentaire());
         }
 
         workflowRepository.save(wf);
         return toResponse(aideRepository.save(aide));
     }
 
-    // ═══════════════════════════════
-    // DÉCISION PRÉSIDENT (étape 2)
-    // ═══════════════════════════════
+    // ═══ DÉCISION PRÉSIDENT ═══
 
     public AideDto.Response decisionPresident(Long aideId, AideDto.DecisionRequest req) {
         Aide aide = getAideActive(aideId);
-
         if (aide.getEtat() != Aide.EtatAide.EN_ETUDE)
-            throw new RuntimeException("La demande doit etre EN_ETUDE. Etat actuel: " + aide.getEtat());
+            throw new RuntimeException("La demande doit etre EN_ETUDE. Etat: " + aide.getEtat());
 
         WorkflowValidation wfBureau = workflowRepository
                 .findByAideIdAndEtape(aideId, WorkflowValidation.Etape.AGENT_BUREAU)
                 .orElseThrow(() -> new RuntimeException("Etape Agent de bureau introuvable"));
         if (wfBureau.getDecision() != WorkflowValidation.Decision.APPROUVE)
-            throw new RuntimeException("L'agent de bureau doit approuver en premier.");
+            throw new RuntimeException("L agent de bureau doit approuver en premier.");
 
         WorkflowValidation wfPres = workflowRepository
                 .findByAideIdAndEtape(aideId, WorkflowValidation.Etape.PRESIDENT)
@@ -219,29 +192,30 @@ public class AideService {
         wfPres.setDecision(decision);
         wfPres.setDateDecision(LocalDateTime.now());
         wfPres.setCommentaire(req.getCommentaire());
-        wfPres.setValidePar(getCurrentUser());
+        wfPres.setValidePar(getCurrentUserNomPrenom()); // Nom Prénom
 
         if (decision == WorkflowValidation.Decision.APPROUVE) {
             if (req.getMontantAccorde() != null) aide.setMontantAccorde(req.getMontantAccorde());
             aide.setEtat(Aide.EtatAide.VALIDEE);
+            aide.setDateTraitement(LocalDate.now());
+            envoyerNotificationAideValidee(aide);
         } else {
             aide.setEtat(Aide.EtatAide.REJETEE);
+            aide.setDateTraitement(LocalDate.now());
+            envoyerNotificationAideRejetee(aide, req.getCommentaire());
         }
-        aide.setDateTraitement(LocalDate.now());
 
         workflowRepository.save(wfPres);
         return toResponse(aideRepository.save(aide));
     }
 
-    // ═══════════════════════════════
-    // VIREMENT
-    // ═══════════════════════════════
+    // ═══ VIREMENT ═══
 
     public AideDto.Response enregistrerVirement(Long aideId, AideDto.VirementRequest req) {
         Aide aide = aideRepository.findById(aideId)
                 .orElseThrow(() -> new RuntimeException("Aide introuvable"));
         if (aide.getEtat() != Aide.EtatAide.VALIDEE)
-            throw new RuntimeException("La demande doit etre VALIDEE pour enregistrer un virement.");
+            throw new RuntimeException("La demande doit etre VALIDEE.");
 
         Virement v = virementRepository.findByAideId(aideId).orElse(new Virement());
         v.setAide(aide);
@@ -255,9 +229,7 @@ public class AideService {
         return toResponse(aide);
     }
 
-    // ═══════════════════════════════
-    // PIÈCES JOINTES
-    // ═══════════════════════════════
+    // ═══ PIÈCES JOINTES ═══
 
     public Map<String, String> uploadPiece(Long aideId, MultipartFile file) throws IOException {
         Aide aide = aideRepository.findById(aideId)
@@ -307,27 +279,83 @@ public class AideService {
         Files.deleteIfExists(Paths.get(aide.getPiecesJointesDir(), nomFichier));
     }
 
-    // ═══════════════════════════════
-    // HELPERS
-    // ═══════════════════════════════
+    // ═══ HELPERS PRIVÉS ═══
 
     /**
-     * Vérifie que l'utilisateur connecté a le droit d'accéder à cette aide.
-     * Admin/agent → accès libre. Adhérent → uniquement ses propres demandes.
+     * Retourne "Prénom NOM" de l'utilisateur connecté.
+     * Utilisé pour saisiPar et validePar (plus lisible que l'email).
      */
+    private String getCurrentUserNomPrenom() {
+        try {
+            String email = getCurrentUserEmail();
+            if ("systeme".equals(email)) return "Système";
+            Utilisateur u = utilisateurRepository.findByEmail(email).orElse(null);
+            if (u != null) {
+                String prenom = u.getPrenom() != null ? u.getPrenom().trim() : "";
+                String nom    = u.getNom()    != null ? u.getNom().trim()    : "";
+                if (!prenom.isEmpty() || !nom.isEmpty())
+                    return (prenom + " " + nom).trim();
+            }
+            // fallback : extraire le nom depuis l'email (avant @)
+            return email.contains("@") ? email.substring(0, email.indexOf('@')) : email;
+        } catch (Exception e) {
+            return "Système";
+        }
+    }
+
+    private String getCurrentUserEmail() {
+        try {
+            var auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && !auth.getName().equals("anonymousUser")) return auth.getName();
+        } catch (Exception ignored) {}
+        return "systeme";
+    }
+
+    private void envoyerNotificationAideValidee(Aide aide) {
+        try {
+            Adherent adherent = aide.getAdherent();
+            if (adherent == null || adherent.getUtilisateur() == null) return;
+            String emailAdherent = adherent.getUtilisateur().getEmail();
+            if (emailAdherent == null) return;
+            emailService.envoyerEmailAideValidee(
+                emailAdherent, adherent.getNom(), adherent.getPrenom(),
+                aide.getNumeroDemande(),
+                aide.getTypeAide() != null ? aide.getTypeAide().getNom() : "—",
+                aide.getMontantAccorde()
+            );
+        } catch (Exception e) {
+            System.err.println("Erreur notification aide validee: " + e.getMessage());
+        }
+    }
+
+    private void envoyerNotificationAideRejetee(Aide aide, String motif) {
+        try {
+            Adherent adherent = aide.getAdherent();
+            if (adherent == null || adherent.getUtilisateur() == null) return;
+            String emailAdherent = adherent.getUtilisateur().getEmail();
+            if (emailAdherent == null) return;
+            emailService.envoyerEmailAideRejetee(
+                emailAdherent, adherent.getNom(), adherent.getPrenom(),
+                aide.getNumeroDemande(),
+                aide.getTypeAide() != null ? aide.getTypeAide().getNom() : "—",
+                motif
+            );
+        } catch (Exception e) {
+            System.err.println("Erreur notification aide rejetee: " + e.getMessage());
+        }
+    }
+
     private void verifierDroitAcces(Aide aide) {
-        String email = getCurrentUser();
+        String email = getCurrentUserEmail();
         try {
             Utilisateur u = utilisateurRepository.findByEmail(email).orElse(null);
-            if (u == null) return; // pas trouvé → laisser passer (admin)
+            if (u == null) return;
             Adherent adherent = adherentRepository.findByUtilisateurId(u.getId()).orElse(null);
-            if (adherent == null) return; // c'est un admin/agent, pas un adhérent
-            // C'est un adhérent → vérifier que la demande lui appartient
+            if (adherent == null) return;
             if (!aide.getAdherent().getId().equals(adherent.getId()))
-                throw new RuntimeException("Vous n'avez pas le droit d'acceder a cette demande.");
-        } catch (RuntimeException e) {
-            throw e;
-        } catch (Exception ignored) {}
+                throw new RuntimeException("Acces non autorise.");
+        } catch (RuntimeException e) { throw e; }
+        catch (Exception ignored) {}
     }
 
     private Aide getAideActive(Long id) {
@@ -350,14 +378,6 @@ public class AideService {
         workflowRepository.save(wf2);
     }
 
-    private String getCurrentUser() {
-        try {
-            var auth = SecurityContextHolder.getContext().getAuthentication();
-            if (auth != null && !auth.getName().equals("anonymousUser")) return auth.getName();
-        } catch (Exception ignored) {}
-        return "systeme";
-    }
-
     private String genererNumeroDemande() {
         String max = aideRepository.findMaxNumeroDemande();
         if (max == null) return "AIDE-00001";
@@ -373,25 +393,21 @@ public class AideService {
         AideDto.Response r = new AideDto.Response();
         r.setId(a.getId()); r.setNumeroDemande(a.getNumeroDemande());
         r.setMontantDemande(a.getMontantDemande()); r.setMontantAccorde(a.getMontantAccorde());
-        r.setMotif(a.getMotif()); r.setEtat(a.getEtat() != null ? a.getEtat().name() : null);
+        r.setEtat(a.getEtat() != null ? a.getEtat().name() : null);
         r.setDateDemande(a.getDateDemande()); r.setDateTraitement(a.getDateTraitement());
         r.setSaisiPar(a.getSaisiPar());
 
         if (a.getAdherent() != null) {
             AideDto.AdherentInfo ai = new AideDto.AdherentInfo();
             ai.setId(a.getAdherent().getId());
-            ai.setNom(a.getAdherent().getNom());
-            ai.setPrenom(a.getAdherent().getPrenom());
+            ai.setNom(a.getAdherent().getNom()); ai.setPrenom(a.getAdherent().getPrenom());
             ai.setNumeroAdherent(a.getAdherent().getNumeroAdherent());
-            ai.setCin(a.getAdherent().getCin());
-            r.setAdherent(ai);
+            ai.setCin(a.getAdherent().getCin()); r.setAdherent(ai);
         }
         if (a.getTypeAide() != null) {
             AideDto.TypeAideInfo ti = new AideDto.TypeAideInfo();
-            ti.setId(a.getTypeAide().getId());
-            ti.setNom(a.getTypeAide().getNom());
-            ti.setMontantMax(a.getTypeAide().getMontantMax());
-            r.setTypeAide(ti);
+            ti.setId(a.getTypeAide().getId()); ti.setNom(a.getTypeAide().getNom());
+            ti.setMontantMax(a.getTypeAide().getMontantMax()); r.setTypeAide(ti);
         }
 
         List<AideDto.WorkflowInfo> wfs = new ArrayList<>();
@@ -399,7 +415,8 @@ public class AideService {
             AideDto.WorkflowInfo wi = new AideDto.WorkflowInfo();
             wi.setId(wf.getId()); wi.setEtape(wf.getEtape().name());
             wi.setDecision(wf.getDecision().name()); wi.setDateDecision(wf.getDateDecision());
-            wi.setCommentaire(wf.getCommentaire()); wi.setValidePar(wf.getValidePar());
+            wi.setCommentaire(wf.getCommentaire());
+            wi.setValidePar(wf.getValidePar()); // Nom Prénom
             wi.setOrdre(wf.getOrdre()); wi.setMontantPropose(wf.getMontantPropose());
             wfs.add(wi);
         }

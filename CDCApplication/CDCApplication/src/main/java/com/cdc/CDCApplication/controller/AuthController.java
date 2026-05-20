@@ -9,96 +9,112 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/auth")
+@CrossOrigin(origins = "http://localhost:5173", allowedHeaders = "*",
+    methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.OPTIONS})
 public class AuthController {
 
     private final AuthenticationManager authenticationManager;
-    private final JwtUtil jwtUtil;
+    private final JwtUtil               jwtUtil;
     private final UtilisateurRepository utilisateurRepository;
+    private final PasswordEncoder       passwordEncoder;
 
     public AuthController(AuthenticationManager authenticationManager,
-                          JwtUtil jwtUtil,
-                          UtilisateurRepository utilisateurRepository) {
+                           JwtUtil jwtUtil,
+                           UtilisateurRepository utilisateurRepository,
+                           PasswordEncoder passwordEncoder) {
         this.authenticationManager = authenticationManager;
-        this.jwtUtil = jwtUtil;
+        this.jwtUtil               = jwtUtil;
         this.utilisateurRepository = utilisateurRepository;
+        this.passwordEncoder       = passwordEncoder;
     }
 
     @PostMapping("/login")
-    public ResponseEntity<Map<String, Object>> login(@RequestBody LoginRequest request) {
+    public ResponseEntity<?> login(@RequestBody Map<String, String> body) {
+        String email    = body.get("email");
+        String password = body.get("password");
+
+        if (email == null || password == null)
+            return ResponseEntity.badRequest()
+                .body(Map.of("message", "Email et mot de passe requis."));
+
         try {
-            // Authentifier avec email + mot de passe
-            authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                    request.getEmail().trim(),
-                    request.getPassword().trim()
-                )
-            );
+            Authentication auth = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(email, password));
 
-            // Charger l'utilisateur pour récupérer ses infos
-            Utilisateur utilisateur = utilisateurRepository
-                    .findByEmail(request.getEmail().trim())
-                    .orElseThrow();
+            Utilisateur u = utilisateurRepository.findByEmail(email)
+                    .orElseThrow(() -> new RuntimeException("Utilisateur introuvable"));
 
-            // Collecter les roles
-            List<String> roles = utilisateur.getRoles().stream()
-                    .map(r -> r.getNom().toUpperCase())
-                    .collect(Collectors.toList());
+            List<String> roles      = new ArrayList<>();
+            List<String> privileges = new ArrayList<>();
+            boolean isAdmin = false;
 
-            // Collecter tous les privileges
-            List<String> privileges = utilisateur.getRoles().stream()
-                    .flatMap(r -> r.getPrivileges().stream())
-                    .map(p -> p.getNom().toUpperCase())
-                    .distinct()
-                    .collect(Collectors.toList());
+            for (Role r : u.getRoles()) {
+                roles.add(r.getNom());
+                String rNom = r.getNom().toUpperCase();
+                if (rNom.equals("ADMIN") || rNom.equals("ADMINISTRATEUR")) isAdmin = true;
+                for (Privilege p : r.getPrivileges())
+                    privileges.add(p.getNom());
+            }
 
-            // Verifier si admin (role ADMIN ou aucun role = acces complet)
-            boolean isAdmin = roles.stream()
-                    .anyMatch(r -> r.equals("ADMIN") || r.equals("ADMINISTRATEUR"));
+            // ← genererToken (méthode française, cohérente avec votre JwtUtil)
+            String token = jwtUtil.genererToken(email);
 
-            // Generer le token JWT
-            String token = jwtUtil.generateToken(utilisateur.getEmail(), roles, privileges);
+            Map<String, Object> response = new HashMap<>();
+            response.put("token",      token);
+            response.put("email",      u.getEmail());
+            response.put("nom",        u.getNom());
+            response.put("prenom",     u.getPrenom());
+            response.put("roles",      roles);
+            response.put("privileges", privileges);
+            response.put("isAdmin",    isAdmin);
 
-            Map<String, Object> resp = new HashMap<>();
-            resp.put("token", token);
-            resp.put("email", utilisateur.getEmail());
-            resp.put("nom", utilisateur.getNom());
-            resp.put("prenom", utilisateur.getPrenom());
-            resp.put("roles", roles);
-            resp.put("privileges", privileges);
-            resp.put("isAdmin", isAdmin);
-
-            return ResponseEntity.ok(resp);
+            return ResponseEntity.ok(response);
 
         } catch (BadCredentialsException e) {
-            Map<String, Object> err = new HashMap<>();
-            err.put("message", "Email ou mot de passe incorrect");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(err);
-        } catch (DisabledException e) {
-            Map<String, Object> err = new HashMap<>();
-            err.put("message", "Compte inactif ou expiré");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(err);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("message", "Email ou mot de passe incorrect."));
         } catch (Exception e) {
-            Map<String, Object> err = new HashMap<>();
-            err.put("message", "Erreur d'authentification: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(err);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("message", e.getMessage()));
         }
     }
 
-    public static class LoginRequest {
-        private String email;
-        private String password;
-        public String getEmail() { return email; }
-        public void setEmail(String email) { this.email = email; }
-        public String getPassword() { return password; }
-        public void setPassword(String password) { this.password = password; }
+    @PostMapping("/reinitialiser-mot-de-passe")
+    public ResponseEntity<?> reinitialiserMotDePasse(@RequestBody Map<String, String> body) {
+        String token      = body.get("token");
+        String nouveauMdp = body.get("nouveauMotDePasse");
+
+        if (token == null || nouveauMdp == null)
+            return ResponseEntity.badRequest()
+                .body(Map.of("message", "Token et mot de passe requis."));
+        if (nouveauMdp.length() < 8)
+            return ResponseEntity.badRequest()
+                .body(Map.of("message", "Le mot de passe doit contenir au moins 8 caractères."));
+
+        Utilisateur u = utilisateurRepository.findByTokenResetMdp(token).orElse(null);
+
+        if (u == null)
+            return ResponseEntity.badRequest().body(Map.of("message", "Token invalide."));
+        if (u.getTokenExpiry() != null && u.getTokenExpiry().isBefore(LocalDateTime.now()))
+            return ResponseEntity.badRequest()
+                .body(Map.of("message", "Ce lien a expiré. Faites une nouvelle demande."));
+
+        u.setMotDePasse(passwordEncoder.encode(nouveauMdp));
+        u.setTokenResetMdp(null);
+        u.setTokenExpiry(null);
+        u.setCompteConfigure(true);
+        utilisateurRepository.save(u);
+
+        return ResponseEntity.ok(Map.of("message", "Mot de passe modifié avec succès."));
     }
 }

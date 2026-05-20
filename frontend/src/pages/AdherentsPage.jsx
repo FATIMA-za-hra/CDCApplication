@@ -18,7 +18,7 @@ import { FileUpload } from 'primereact/fileupload'
 import { Timeline } from 'primereact/timeline'
 import { Tag } from 'primereact/tag'
 import { adherentApi, categorieApi, adhesionApi } from '../services/api'
-import { usePhotoUrl, Avatar } from '../components/usePhoto.jsx'
+import { usePhotoUrl, Avatar } from '../components/usePhoto'
 
 const STATUTS = [
   { label: 'Actif',          value: 'ACTIF' },
@@ -39,7 +39,7 @@ const TYPES_PIECES = ['CIN', 'Certificat de travail', 'Photo', 'Acte de naissanc
 const EMPTY = {
   nom: '', prenom: '', cin: '', matricule: '', dateNaissance: null,
   situationFamiliale: '', service: '', telephone: '', adresse: '',
-  email: '', dateAdhesion: null, statut: 'ACTIF',
+  email: '', rib: '', dateAdhesion: null, statut: 'ACTIF',
   categorieId: null, nombreEnfants: 0, observations: ''
 }
 
@@ -124,7 +124,7 @@ export default function AdherentsPage() {
       dateNaissance: row.dateNaissance ? new Date(row.dateNaissance) : null,
       situationFamiliale: row.situationFamiliale || '',
       service: row.service || '', telephone: row.telephone || '',
-      adresse: row.adresse || '', email: row.email || '',
+      adresse: row.adresse || '', email: row.email || '', rib: row.rib || '',
       dateAdhesion: row.dateAdhesion ? new Date(row.dateAdhesion) : null,
       statut: row.statut || 'ACTIF', categorieId: row.categorie?.id || null,
       nombreEnfants: row.nombreEnfants || 0, observations: row.observations || ''
@@ -326,7 +326,7 @@ export default function AdherentsPage() {
 </style></head><body>
 <div class="carte">
   <div class="header">
-    <div><div class="org">CDCApplication</div><div class="type">Carte d Adherent</div></div>
+    <div><div class="org">AOS Social</div><div class="type">Carte d Adherent</div></div>
     <div class="num">${selected.numeroAdherent||'---'}</div>
   </div>
   <div class="body">
@@ -518,6 +518,15 @@ export default function AdherentsPage() {
             <div className="field col"><label className="font-semibold">Adresse</label>
               <InputText value={form.adresse} onChange={e=>setForm({...form,adresse:e.target.value})} className="w-full" /></div>
           </div>
+          <div className="field">
+            <label className="font-semibold">RIB</label>
+            <InputText value={form.rib} onChange={e=>setForm({...form,rib:e.target.value})}
+              placeholder="Ex: 024 810 0001234567890123 45"
+              className="w-full" />
+            <small style={{ color:'#94a3b8' }}>
+              Utilisé automatiquement lors d'un virement
+            </small>
+          </div>
 
           <Divider className="my-1" />
           <div style={{ fontWeight:700, fontSize:13, color:'#374151' }}><i className="pi pi-id-card mr-2"></i>Adhésion</div>
@@ -610,6 +619,7 @@ export default function AdherentsPage() {
                       { label:'Service',              value: selected.service || '—' },
                       { label:'Téléphone',            value: selected.telephone || '—' },
                       { label:'Email',                value: selected.email || '—' },
+                      { label:'RIB',                  value: selected.rib   || '—' },
                       { label:'Catégorie',            value: selected.categorie?.libelle || '—' },
                       { label:"Date d'adhésion",      value: selected.dateAdhesion ? new Date(selected.dateAdhesion).toLocaleDateString('fr-FR') : '—' },
                     ].map(item => (
@@ -754,7 +764,9 @@ export default function AdherentsPage() {
                     background:'rgba(255,255,255,.04)', top:-45, right:-35 }}></div>
                   <div className="flex justify-content-between align-items-start">
                     <div>
-                      <div style={{ fontWeight:700, fontSize:13, letterSpacing:2, color:'#ccc', textTransform:'uppercase' }}>CDCApplication</div>
+                      <div style={{ fontWeight:700, fontSize:13, letterSpacing:2, color:'#ccc', textTransform:'uppercase' }}>
+                        <img src="/logo-aos.jpg" alt="" style={{ height:22, marginRight:6, verticalAlign:'middle', borderRadius:3 }} onError={e=>{if(!e.target.src.includes('.png')){e.target.src='/logo-aos.png'}else{e.target.style.display='none'}}} />
+                        AOS Social</div>
                       <div style={{ fontSize:10, color:'#666', marginTop:2 }}>Carte d'Adhérent</div>
                     </div>
                     <div style={{ fontWeight:600, fontSize:12, color:'#aaa' }}>{selected.numeroAdherent}</div>

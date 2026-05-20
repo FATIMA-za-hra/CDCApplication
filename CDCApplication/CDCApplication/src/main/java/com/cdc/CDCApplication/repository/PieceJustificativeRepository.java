@@ -7,5 +7,5 @@ import java.util.List;
 
 @Repository
 public interface PieceJustificativeRepository extends JpaRepository<PieceJustificative, Long> {
-    List<PieceJustificative> findByAdherentIdOrderByDateAjoutDesc(Long adherentId);
+    List<PieceJustificative> findByAdherentId(Long adherentId);
 }

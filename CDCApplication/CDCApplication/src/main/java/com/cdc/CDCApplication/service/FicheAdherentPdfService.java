@@ -13,6 +13,7 @@ import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.awt.Color;
@@ -33,6 +34,12 @@ public class FicheAdherentPdfService {
     /* ─── Palette : aucun bleu, aucun noir absolu ─── */
     private static final Color ENTETE_BG   = new Color(250, 250, 250); // fond en-tête très clair
     private static final Color ENTETE_BORD = new Color(180, 180, 180); // trait de séparation
+    @Value("${app.nom:AOS Social}")
+    private String nomApp;
+
+    @Value("${app.logo.path:./uploads/logo-aos.jpg}")
+    private String logoPath;
+
     private static final Color TITRE_ORG   = new Color(40,  40,  40);  // "CDCApplication"
     private static final Color SOUS_TITRE  = new Color(110, 110, 110); // "FICHE ADHERENT"
     private static final Color NUM_COLOR   = new Color(60,  60,  60);  // numéro adhérent
@@ -89,8 +96,23 @@ public class FicheAdherentPdfService {
         // Filet séparateur bas en-tête
         line(cs, 0, H - 82, W, H - 82, ENTETE_BORD, 0.8f);
 
-        txt(cs, "CDCApplication", M, H - 28, TITRE_ORG, B, 17);
-        txt(cs, "FICHE  ADHERENT", M, H - 46, SOUS_TITRE, N, 9);
+        // Logo AOS dans l'en-tête
+        try {
+            java.io.File lf = new java.io.File(logoPath);
+            if (!lf.exists()) {
+                // Essayer l'autre extension
+                String alt = logoPath.endsWith(".jpg")
+                    ? logoPath.replace(".jpg", ".png")
+                    : logoPath.replace(".png", ".jpg");
+                lf = new java.io.File(alt);
+            }
+            if (lf.exists()) {
+                PDImageXObject logo = PDImageXObject.createFromFile(lf.getAbsolutePath(), doc);
+                cs.drawImage(logo, M, H - 74, 44, 44);
+            }
+        } catch (Exception ignored) {}
+        txt(cs, nomApp, M + 52, H - 28, TITRE_ORG, B, 17);
+        txt(cs, "FICHE  ADHERENT", M + 52, H - 46, SOUS_TITRE, N, 9);
 
         String numTxt = val(a.getNumeroAdherent());
         float  nw     = B.getStringWidth(numTxt) / 1000f * 13;
@@ -114,11 +136,12 @@ public class FicheAdherentPdfService {
         line(cs, M + PSZ,y - PSZ, M + PSZ, y,       ENTETE_BORD, 0.5f);
 
         boolean hasPhoto = false;
-        if (a.getPhotoChemin() != null) {
+        if (a.getPhotoData() != null && a.getPhotoData().length > 0) {
             try {
-                File f = new File(a.getPhotoChemin());
-                if (f.exists()) {
-                    PDImageXObject img = PDImageXObject.createFromFile(a.getPhotoChemin(), doc);
+                {
+                    PDImageXObject img = PDImageXObject.createFromByteArray(doc,
+                        a.getPhotoData(),
+                        a.getPhotoTypeContenu() != null ? a.getPhotoTypeContenu() : "image/jpeg");
                     cs.drawImage(img, M, y - PSZ, PSZ, PSZ);
                     hasPhoto = true;
                 }
@@ -138,7 +161,7 @@ public class FicheAdherentPdfService {
         line(cs, DX, y - 20, DX + DW, y - 20, CELL_BORD, 0.4f);
 
         float col1 = DX, col2 = DX + DW / 2f;
-        float ry   = y - 33, rH = 13;
+        float ry   = y - 33, rH = 16;
 
         String[][] c1 = {{"CIN",       val(a.getCin())},      {"Matricule", val(a.getMatricule())}, {"Telephone", val(a.getTelephone())}};
         String[][] c2 = {{"Service",   val(a.getService())},  {"Email",     trunc(val(a.getEmail()), 26)}, {"Statut",    a.getStatut() != null ? a.getStatut().name() : "---"}};
@@ -248,7 +271,7 @@ public class FicheAdherentPdfService {
     }
 
     private float table2col(PDPageContentStream cs, String[][] rows, float x, float y, float w, PDType1Font N, PDType1Font B) throws Exception {
-        float lw  = w * 0.22f, vw = w * 0.28f, rH = 14;
+        float lw  = w * 0.22f, vw = w * 0.28f, rH = 18;
         boolean alt = false;
         for (String[] row : rows) {
             if (alt) rect(cs, x, y - rH + 3, w, rH, TR_ALT);
@@ -282,7 +305,7 @@ public class FicheAdherentPdfService {
     }
 
     private void piedPage(PDPageContentStream cs, PDType1Font N, float W, float M) throws Exception {
-        String t = "CDCApplication  ·  Fiche Adherent  ·  " + LocalDate.now().format(FMT);
+        String t = nomApp + "  ·  Fiche Adherent  ·  " + LocalDate.now().format(FMT);
         line(cs, M, 32, W - M, 32, PIED_LIGNE, 0.5f);
         float tw = N.getStringWidth(san(t)) / 1000f * 7;
         txt(cs, t, (W - tw) / 2, 20, PIED_COLOR, N, 7);

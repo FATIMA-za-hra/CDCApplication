@@ -8,18 +8,30 @@ import java.time.LocalDate;
 @Table(name = "virements")
 public class Virement {
 
+    public enum StatutVirement {
+        EN_ATTENTE,  
+        EXECUTE,     
+        ANNULE       
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // Lien aide sociale (optionnel — virement peut être indépendant d'une aide)
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "aide_id", nullable = false)
+    @JoinColumn(name = "aide_id")
     private Aide aide;
+
+    // Lien caisse (optionnel — sortie depuis la caisse)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "caisse_id")
+    private Caisse caisse;
 
     @Column(nullable = false)
     private String beneficiaire;
 
-    @Column(nullable = false)
+    @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal montant;
 
     private String motif;
@@ -33,12 +45,24 @@ public class Virement {
     @Column(name = "rib_beneficiaire")
     private String ribBeneficiaire;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private StatutVirement statut = StatutVirement.EN_ATTENTE;
+
+    @Column(name = "execute_par")
+    private String executePar;
+
+    @Column(name = "date_execution")
+    private LocalDate dateExecution;
+
     public Virement() {}
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public Aide getAide() { return aide; }
     public void setAide(Aide a) { this.aide = a; }
+    public Caisse getCaisse() { return caisse; }
+    public void setCaisse(Caisse c) { this.caisse = c; }
     public String getBeneficiaire() { return beneficiaire; }
     public void setBeneficiaire(String b) { this.beneficiaire = b; }
     public BigDecimal getMontant() { return montant; }
@@ -51,4 +75,10 @@ public class Virement {
     public void setDateVirement(LocalDate d) { this.dateVirement = d; }
     public String getRibBeneficiaire() { return ribBeneficiaire; }
     public void setRibBeneficiaire(String r) { this.ribBeneficiaire = r; }
+    public StatutVirement getStatut() { return statut; }
+    public void setStatut(StatutVirement s) { this.statut = s; }
+    public String getExecutePar() { return executePar; }
+    public void setExecutePar(String e) { this.executePar = e; }
+    public LocalDate getDateExecution() { return dateExecution; }
+    public void setDateExecution(LocalDate d) { this.dateExecution = d; }
 }

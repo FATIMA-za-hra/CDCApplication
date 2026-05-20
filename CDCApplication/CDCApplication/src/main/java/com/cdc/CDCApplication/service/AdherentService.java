@@ -9,6 +9,8 @@ import com.cdc.CDCApplication.repository.CategorieAdhesionRepository;
 import com.cdc.CDCApplication.repository.UtilisateurRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 
 import java.time.LocalDate;
 import java.util.*;
@@ -22,6 +24,9 @@ public class AdherentService {
     private final UtilisateurRepository utilisateurRepository;
     private final EmailService emailService;
     private final HistoriqueService historiqueService;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     public AdherentService(AdherentRepository adherentRepository,
                             CategorieAdhesionRepository categorieRepository,
@@ -55,7 +60,6 @@ public class AdherentService {
 
         Adherent saved = adherentRepository.save(adherent);
 
-        // Historique dans la même transaction (l'ID existe après save)
         historiqueService.enregistrer(
             saved.getId(), "CREATION", null, null,
             "Fiche creee : " + saved.getNumeroAdherent(),
@@ -79,6 +83,9 @@ public class AdherentService {
     }
 
     public AdherentDto.Response modifier(Long id, AdherentDto.Request dto) {
+        // Vider le cache Hibernate pour forcer la lecture fraîche depuis la base
+        entityManager.clear();
+
         Adherent ancien = adherentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Adherent introuvable: " + id));
 
@@ -86,47 +93,47 @@ public class AdherentService {
                 && adherentRepository.existsByCin(dto.getCin()))
             throw new RuntimeException("Un adherent avec ce CIN existe deja.");
 
-        // ── Capturer TOUTES les anciennes valeurs avant modification ──
-        final Long   aid       = ancien.getId();
-        final String oldNom    = ancien.getNom();
-        final String oldPrenom = ancien.getPrenom();
-        final String oldStatut = ancien.getStatut() != null ? ancien.getStatut().name() : null;
-        final String oldTel    = ancien.getTelephone();
-        final String oldEmail  = ancien.getEmail();
-        final String oldSvc    = ancien.getService();
-        final String oldAdr    = ancien.getAdresse();
-        final String oldSit    = ancien.getSituationFamiliale();
+        // Capturer les anciennes valeurs FRAÎCHES depuis la base
+        final Long    aid      = ancien.getId();
+        final String  oldNom   = ancien.getNom();
+        final String  oldPren  = ancien.getPrenom();
+        final String  oldStat  = ancien.getStatut() != null ? ancien.getStatut().name() : null;
+        final String  oldTel   = ancien.getTelephone();
+        final String  oldEmail = ancien.getEmail();
+        final String  oldSvc   = ancien.getService();
+        final String  oldAdr   = ancien.getAdresse();
+        final String  oldSit   = ancien.getSituationFamiliale();
         final Integer oldEnf   = ancien.getNombreEnfants();
-        final Long   oldCatId  = ancien.getCategorie() != null ? ancien.getCategorie().getId() : null;
-        final String oldCatLib = ancien.getCategorie() != null ? ancien.getCategorie().getLibelle() : "Aucune";
+        final Long    oldCatId = ancien.getCategorie() != null ? ancien.getCategorie().getId() : null;
+        final String  oldCatLb = ancien.getCategorie() != null ? ancien.getCategorie().getLibelle() : "Aucune";
 
-        // ── Modifier et sauvegarder ──
+        // Modifier et sauvegarder
         mapDtoToAdherent(dto, ancien);
         adherentRepository.save(ancien);
 
-        // ── Enregistrer les changements dans l'historique ──
-        if (dto.getNom() != null && !dto.getNom().equals(oldNom))
+        // Enregistrer les différences dans l'historique
+        if (isChanged(dto.getNom(), oldNom))
             historiqueService.enregistrer(aid, "MODIFICATION", "nom", oldNom, dto.getNom(), null);
 
-        if (dto.getPrenom() != null && !dto.getPrenom().equals(oldPrenom))
-            historiqueService.enregistrer(aid, "MODIFICATION", "prenom", oldPrenom, dto.getPrenom(), null);
+        if (isChanged(dto.getPrenom(), oldPren))
+            historiqueService.enregistrer(aid, "MODIFICATION", "prenom", oldPren, dto.getPrenom(), null);
 
-        if (dto.getStatut() != null && !dto.getStatut().toUpperCase().equals(oldStatut))
-            historiqueService.enregistrer(aid, "CHANGEMENT_STATUT", "statut", oldStatut, dto.getStatut().toUpperCase(), null);
+        if (dto.getStatut() != null && !dto.getStatut().toUpperCase().equals(oldStat))
+            historiqueService.enregistrer(aid, "CHANGEMENT_STATUT", "statut", oldStat, dto.getStatut().toUpperCase(), null);
 
-        if (dto.getTelephone() != null && !dto.getTelephone().equals(oldTel))
+        if (isChanged(dto.getTelephone(), oldTel))
             historiqueService.enregistrer(aid, "MODIFICATION", "telephone", oldTel, dto.getTelephone(), null);
 
-        if (dto.getEmail() != null && !dto.getEmail().equals(oldEmail))
+        if (isChanged(dto.getEmail(), oldEmail))
             historiqueService.enregistrer(aid, "MODIFICATION", "email", oldEmail, dto.getEmail(), null);
 
-        if (dto.getService() != null && !dto.getService().equals(oldSvc))
+        if (isChanged(dto.getService(), oldSvc))
             historiqueService.enregistrer(aid, "MODIFICATION", "service", oldSvc, dto.getService(), null);
 
-        if (dto.getAdresse() != null && !dto.getAdresse().equals(oldAdr))
+        if (isChanged(dto.getAdresse(), oldAdr))
             historiqueService.enregistrer(aid, "MODIFICATION", "adresse", oldAdr, dto.getAdresse(), null);
 
-        if (dto.getSituationFamiliale() != null && !dto.getSituationFamiliale().equals(oldSit))
+        if (isChanged(dto.getSituationFamiliale(), oldSit))
             historiqueService.enregistrer(aid, "MODIFICATION", "situationFamiliale", oldSit, dto.getSituationFamiliale(), null);
 
         if (dto.getNombreEnfants() != null && !dto.getNombreEnfants().equals(oldEnf))
@@ -134,11 +141,19 @@ public class AdherentService {
                 String.valueOf(oldEnf), String.valueOf(dto.getNombreEnfants()), null);
 
         if (dto.getCategorieId() != null && !dto.getCategorieId().equals(oldCatId)) {
-            String newLib = ancien.getCategorie() != null ? ancien.getCategorie().getLibelle() : dto.getCategorieId().toString();
-            historiqueService.enregistrer(aid, "MODIFICATION", "categorie", oldCatLib, newLib, null);
+            String newLib = ancien.getCategorie() != null ? ancien.getCategorie().getLibelle() : String.valueOf(dto.getCategorieId());
+            historiqueService.enregistrer(aid, "MODIFICATION", "categorie", oldCatLb, newLib, null);
         }
 
         return toResponse(ancien);
+    }
+
+    /** Compare deux valeurs en considérant null et vide comme identiques */
+    private boolean isChanged(String newVal, String oldVal) {
+        if (newVal == null) return false;
+        String n = newVal.trim();
+        String o = oldVal != null ? oldVal.trim() : "";
+        return !n.equals(o);
     }
 
     public void supprimer(Long id) {
@@ -199,6 +214,7 @@ public class AdherentService {
         a.setDateAdhesion(dto.getDateAdhesion() != null ? dto.getDateAdhesion() : LocalDate.now());
         a.setNombreEnfants(dto.getNombreEnfants() != null ? dto.getNombreEnfants() : 0);
         a.setObservations(dto.getObservations());
+        if (dto.getRib() != null) a.setRib(dto.getRib());
         if (dto.getStatut() != null) {
             try { a.setStatut(Adherent.StatutAdherent.valueOf(dto.getStatut().toUpperCase())); }
             catch (IllegalArgumentException e) { a.setStatut(Adherent.StatutAdherent.ACTIF); }
@@ -220,8 +236,9 @@ public class AdherentService {
         r.setStatut(a.getStatut() != null ? a.getStatut().name() : null);
         r.setNombreEnfants(a.getNombreEnfants());
         r.setObservations(a.getObservations());
+        r.setRib(a.getRib());
         r.setDateCreation(a.getDateCreation());
-        r.setPhotoChemin(a.getPhotoChemin() != null ? "/api/adherents/" + a.getId() + "/photo" : null);
+        r.setPhotoChemin(a.getPhotoData() != null && a.getPhotoData().length > 0 ? "/api/adherents/" + a.getId() + "/photo" : null);
         if (a.getCategorie() != null) {
             CategorieAdhesionDto.Response cat = new CategorieAdhesionDto.Response();
             cat.setId(a.getCategorie().getId()); cat.setLibelle(a.getCategorie().getLibelle());

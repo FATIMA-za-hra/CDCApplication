@@ -1,10 +1,7 @@
 package com.cdc.CDCApplication.service;
 
-import com.cdc.CDCApplication.dto.PrivilegeDto;
 import com.cdc.CDCApplication.entity.Privilege;
-import com.cdc.CDCApplication.entity.Role;
 import com.cdc.CDCApplication.repository.PrivilegeRepository;
-import com.cdc.CDCApplication.repository.RoleRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,95 +12,97 @@ import java.util.*;
 public class PrivilegeService {
 
     private final PrivilegeRepository privilegeRepository;
-    private final RoleRepository roleRepository;
 
-    private static final List<String> ACTIONS_DEFAUT = List.of("create", "read", "update", "delete");
-
-    public PrivilegeService(PrivilegeRepository privilegeRepository, RoleRepository roleRepository) {
+    public PrivilegeService(PrivilegeRepository privilegeRepository) {
         this.privilegeRepository = privilegeRepository;
-        this.roleRepository = roleRepository;
     }
 
-    public List<PrivilegeDto.Response> ajouterParModele(PrivilegeDto.Request dto) {
-        List<String> actions = (dto.getActions() != null && !dto.getActions().isEmpty())
-                ? dto.getActions() : ACTIONS_DEFAUT;
-        List<PrivilegeDto.Response> created = new ArrayList<>();
-        for (String action : actions) {
-            String nomPrivilege = dto.getModele().toLowerCase() + "_" + action.toLowerCase();
-            if (!privilegeRepository.existsByNom(nomPrivilege)) {
-                Privilege p = new Privilege();
-                p.setNom(nomPrivilege);
-                p.setDescription("Privilege " + action + " pour " + dto.getModele());
-                created.add(toResponse(privilegeRepository.save(p)));
-            }
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> findAll() {
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (Privilege p : privilegeRepository.findAll()) list.add(toMap(p));
+        return list;
+    }
+
+    /**
+     * Groupé par module (déduit du nom : ADHERENT_READ → module=ADHERENT).
+     */
+    @Transactional(readOnly = true)
+    public Map<String, List<Map<String, Object>>> findGrouped() {
+        Map<String, List<Map<String, Object>>> grouped = new LinkedHashMap<>();
+        for (Privilege p : privilegeRepository.findAll()) {
+            String module = extraireModule(p.getNom());
+            grouped.computeIfAbsent(module, k -> new ArrayList<>()).add(toMap(p));
+        }
+        // Trier par module
+        Map<String, List<Map<String, Object>>> sorted = new TreeMap<>(grouped);
+        return sorted;
+    }
+
+    /**
+     * Crée 4 privilèges (CREATE, READ, UPDATE, DELETE) pour un modèle donné.
+     * Ex: modele="FOURNISSEUR" → FOURNISSEUR_CREATE, FOURNISSEUR_READ...
+     */
+    public List<Map<String, Object>> creerParModele(String modele, List<String> actions) {
+        List<Map<String, Object>> created = new ArrayList<>();
+        String m = modele.toUpperCase().trim().replace(" ", "_");
+        List<String> acts = (actions != null && !actions.isEmpty())
+            ? actions : List.of("CREATE", "READ", "UPDATE", "DELETE");
+        for (String action : acts) {
+            String nom = m + "_" + action.toUpperCase();
+            if (privilegeRepository.existsByNom(nom)) continue;
+            Privilege p = new Privilege();
+            p.setNom(nom);
+            p.setDescription(action + " sur " + m);
+            created.add(toMap(privilegeRepository.save(p)));
         }
         return created;
     }
 
-    public PrivilegeDto.Response ajouterSingle(PrivilegeDto.Single dto) {
-        if (privilegeRepository.existsByNom(dto.getNom())) {
-            throw new RuntimeException("Ce privilege existe deja: " + dto.getNom());
-        }
+    public Map<String, Object> creer(Map<String, Object> dto) {
+        String nom = ((String) dto.get("nom")).toUpperCase().trim();
+        if (privilegeRepository.existsByNom(nom))
+            throw new RuntimeException("Ce privilege existe deja : " + nom);
         Privilege p = new Privilege();
-        p.setNom(dto.getNom().toLowerCase());
-        p.setDescription(dto.getDescription());
-        return toResponse(privilegeRepository.save(p));
+        p.setNom(nom);
+        p.setDescription((String) dto.get("description"));
+        return toMap(privilegeRepository.save(p));
     }
 
-    public PrivilegeDto.Response modifier(Long id, PrivilegeDto.Single dto) {
+    public Map<String, Object> modifier(Long id, Map<String, Object> dto) {
         Privilege p = privilegeRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Privilege introuvable: " + id));
-        if (!p.getNom().equals(dto.getNom().toLowerCase()) && privilegeRepository.existsByNom(dto.getNom().toLowerCase())) {
-            throw new RuntimeException("Un privilege avec ce nom existe deja: " + dto.getNom());
-        }
-        p.setNom(dto.getNom().toLowerCase().trim());
-        if (dto.getDescription() != null) p.setDescription(dto.getDescription());
-        return toResponse(privilegeRepository.save(p));
+                .orElseThrow(() -> new RuntimeException("Privilege introuvable"));
+        if (dto.get("nom")         != null) p.setNom(((String) dto.get("nom")).toUpperCase().trim());
+        if (dto.get("description") != null) p.setDescription((String) dto.get("description"));
+        return toMap(privilegeRepository.save(p));
     }
 
     public void supprimer(Long id) {
-        Privilege privilege = privilegeRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Privilege introuvable: " + id));
-
-        // Retirer ce privilege de tous les roles qui l'utilisent avant suppression
-        List<Role> tousLesRoles = roleRepository.findAll();
-        for (Role role : tousLesRoles) {
-            boolean retire = role.getPrivileges().removeIf(p -> p.getId().equals(id));
-            if (retire) {
-                roleRepository.save(role);
-            }
-        }
-
-        privilegeRepository.delete(privilege);
+        privilegeRepository.deleteById(id);
     }
 
-    @Transactional(readOnly = true)
-    public List<PrivilegeDto.Response> findAll() {
-        List<PrivilegeDto.Response> list = new ArrayList<>();
-        for (Privilege p : privilegeRepository.findAll()) {
-            list.add(toResponse(p));
-        }
-        return list;
+    /** Extrait le module depuis le nom : ADHERENT_READ → ADHERENT */
+    private String extraireModule(String nom) {
+        if (nom == null) return "AUTRE";
+        int idx = nom.lastIndexOf('_');
+        return idx > 0 ? nom.substring(0, idx) : nom;
     }
 
-    @Transactional(readOnly = true)
-    public Map<String, List<PrivilegeDto.Response>> findGroupedByModele() {
-        Map<String, List<PrivilegeDto.Response>> grouped = new LinkedHashMap<>();
-        for (Privilege p : privilegeRepository.findAll()) {
-            PrivilegeDto.Response resp = toResponse(p);
-            grouped.computeIfAbsent(resp.getModele(), k -> new ArrayList<>()).add(resp);
-        }
-        return grouped;
+    /** Extrait l'action depuis le nom : ADHERENT_READ → read */
+    private String extraireAction(String nom) {
+        if (nom == null) return "";
+        int idx = nom.lastIndexOf('_');
+        return idx >= 0 ? nom.substring(idx + 1).toLowerCase() : nom.toLowerCase();
     }
 
-    private PrivilegeDto.Response toResponse(Privilege p) {
-        PrivilegeDto.Response resp = new PrivilegeDto.Response();
-        resp.setId(p.getId());
-        resp.setNom(p.getNom());
-        resp.setDescription(p.getDescription());
-        String[] parts = p.getNom().split("_", 2);
-        resp.setModele(parts.length > 0 ? parts[0] : p.getNom());
-        resp.setAction(parts.length > 1 ? parts[1] : "");
-        return resp;
+    public Map<String, Object> toMap(Privilege p) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("id",          p.getId());
+        m.put("nom",         p.getNom());
+        m.put("description", p.getDescription() != null ? p.getDescription() : "");
+        // module et action déduits du nom — pas de colonne en base
+        m.put("module",      extraireModule(p.getNom()));
+        m.put("action",      extraireAction(p.getNom()));
+        return m;
     }
 }

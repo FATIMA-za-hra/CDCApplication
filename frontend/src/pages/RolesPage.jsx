@@ -7,6 +7,8 @@ import { InputTextarea } from 'primereact/inputtextarea'
 import { Toast } from 'primereact/toast'
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog'
 import { Checkbox } from 'primereact/checkbox'
+import { IconField } from 'primereact/iconfield'
+import { InputIcon } from 'primereact/inputicon'
 import { Divider } from 'primereact/divider'
 import { Tag } from 'primereact/tag'
 import { roleApi, privilegeApi } from '../services/api'
@@ -82,7 +84,9 @@ function PrivilegeTree({ grouped, selectedIds, onChange }) {
           {openGroups[modele] && (
             <div className="priv-tree-children">
               {privs.map(priv => (
-                <div key={priv.id} className="priv-tree-item" onClick={() => toggleOne(priv.id)}>
+                <div key={priv.id} className="priv-tree-item"
+                  onClick={() => toggleOne(priv.id)}
+                  style={{ cursor: 'pointer' }}>
                   <Checkbox
                     checked={selectedIds.includes(priv.id)}
                     onChange={() => toggleOne(priv.id)}
@@ -107,6 +111,7 @@ export default function RolesPage() {
   const [grouped, setGrouped]   = useState({})
   const [loading, setLoading]   = useState(true)
   const [saving, setSaving]     = useState(false)
+  const [search, setSearch]     = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId]     = useState(null)
   const [form, setForm]         = useState({ nom: '', description: '', privilegeIds: [] })
@@ -124,6 +129,12 @@ export default function RolesPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  const filteredRoles = roles.filter(r =>
+    !search.trim() ||
+    r.nom?.toLowerCase().includes(search.toLowerCase()) ||
+    r.description?.toLowerCase().includes(search.toLowerCase())
+  )
 
   const openNew = () => {
     setForm({ nom: '', description: '', privilegeIds: [] })
@@ -182,10 +193,15 @@ export default function RolesPage() {
     })
   }
 
+  // Boutons icônes uniquement (sans label)
   const actionsTpl = row => (
     <div className="flex gap-2">
-      <Button icon="pi pi-pencil" label="Modifier"  size="small" outlined onClick={() => openEdit(row)} />
-      <Button icon="pi pi-trash"  label="Supprimer" size="small" outlined severity="danger" onClick={() => confirmDelete(row)} />
+      <Button icon="pi pi-pencil" size="small" outlined
+        tooltip="Modifier" tooltipOptions={{ position: 'top' }}
+        onClick={() => openEdit(row)} />
+      <Button icon="pi pi-trash" size="small" outlined severity="danger"
+        tooltip="Supprimer" tooltipOptions={{ position: 'top' }}
+        onClick={() => confirmDelete(row)} />
     </div>
   )
 
@@ -269,18 +285,23 @@ export default function RolesPage() {
       {/* TABLEAU */}
       <div className="cdc-card">
         <DataTable
-          value={roles}
+          value={filteredRoles}
           loading={loading}
           emptyMessage="Aucun rôle."
           header={
             <div className="flex justify-content-between align-items-center">
               <span>{roles.length} rôle(s)</span>
+              <IconField iconPosition="left">
+                <InputIcon className="pi pi-search" />
+                <InputText value={search} onChange={e => setSearch(e.target.value)}
+                  placeholder="Rechercher..." />
+              </IconField>
             </div>
           }
         >
           <Column field="nom"         header="Nom"         sortable style={{ fontWeight: 600 }} />
-          <Column field="description" header="Description"          />
-          <Column header="Actions"    body={actionsTpl}             style={{ width: 220 }} />
+          <Column field="description" header="Description" />
+          <Column header="Actions"    body={actionsTpl}    style={{ width: 100 }} />
         </DataTable>
       </div>
     </div>

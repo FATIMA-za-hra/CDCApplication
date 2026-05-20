@@ -1,15 +1,15 @@
 package com.cdc.CDCApplication.security;
 
-import com.cdc.CDCApplication.service.UserDetailsServiceImpl;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -24,56 +24,41 @@ import java.util.List;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    private final JwtAuthFilter jwtAuthFilter;
-    private final UserDetailsServiceImpl userDetailsService;
+    private final JwtAuthFilter       jwtAuthFilter;
+    private final UserDetailsService  userDetailsService;
 
     public SecurityConfig(JwtAuthFilter jwtAuthFilter,
-                          UserDetailsServiceImpl userDetailsService) {
+                          UserDetailsService userDetailsService) {
         this.jwtAuthFilter      = jwtAuthFilter;
         this.userDetailsService = userDetailsService;
     }
 
-    // PasswordEncoder défini ici — pas dans une classe séparée
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
-    // AuthenticationManager exposé comme bean pour AuthController
     @Bean
-    public AuthenticationManager authenticationManager(
-            AuthenticationConfiguration config) throws Exception {
-        return config.getAuthenticationManager();
-    }
-
-    @Bean
-    public DaoAuthenticationProvider authenticationProvider() {
+    public AuthenticationManager authenticationManager(PasswordEncoder passwordEncoder) {
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
         provider.setUserDetailsService(userDetailsService);
-        provider.setPasswordEncoder(passwordEncoder());
-        return provider;
+        provider.setPasswordEncoder(passwordEncoder);
+        return new ProviderManager(provider);
     }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            .csrf(csrf -> csrf.disable())
+            .csrf(AbstractHttpConfigurer::disable)
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .sessionManagement(session ->
-                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authenticationProvider(authenticationProvider())
+            .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(
-                    "/api/auth/**",
-                    "/api/utilisateurs/configurer-mdp",
-                    "/api/utilisateurs/valider-token",
-                    "/api/auth/mot-de-passe-oublie"
-                ).permitAll()
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/utilisateurs/configurer-mdp").permitAll()
+                .requestMatchers("/api/utilisateurs/valider-token").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
-
         return http.build();
     }
 
@@ -81,10 +66,9 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(List.of("http://localhost:5173"));
-        config.setAllowedMethods(List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
-        config.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
         return source;

@@ -104,6 +104,8 @@ export const adherentApi = {
 
 export const adhesionApi = {
   getAll:              ()        => api.get('/adhesions'),
+  // Adhérent connecté — ses propres adhésions
+  getMesAdhesions:     ()        => api.get('/adhesions/adherent/moi'),
   getById:             (id)      => api.get(`/adhesions/${id}`),
   getByAdherent:       (adhId)   => api.get(`/adhesions/adherent/${adhId}`),
   getByAnnee:          (annee)   => api.get(`/adhesions/annee/${annee}`),
@@ -156,3 +158,4 @@ export const aideApi = {
   telechargerPiece:     (id, nom)  => api.get(`/aides/${id}/pieces/${nom}/telecharger`, { responseType: 'blob' }),
   supprimerPiece:       (id, nom)  => api.delete(`/aides/${id}/pieces/${nom}`)
 }
+

@@ -22,7 +22,7 @@ const ETATS = [
   { label: 'Annulée',  value: 'ANNULEE',  severity: 'secondary'},
 ]
 
-const EMPTY = { typeAideId: null, montantDemande: null, motif: '' }
+const EMPTY = { typeAideId: null, montantDemande: null }
 
 export default function MonEspaceAidePage() {
   const [demandes, setDemandes]         = useState([])
@@ -62,9 +62,9 @@ export default function MonEspaceAidePage() {
   }
 
   const deposer = async () => {
-    if (!form.typeAideId || !form.montantDemande || !form.motif?.trim()) {
+    if (!form.typeAideId || !form.montantDemande) {
       toast.current?.show({ severity: 'warn', summary: 'Attention',
-        detail: 'Type, montant et motif sont obligatoires', life: 3000 }); return
+        detail: 'Type et montant sont obligatoires', life: 3000 }); return
     }
     setSaving(true)
     try {
@@ -277,13 +277,6 @@ export default function MonEspaceAidePage() {
               onValueChange={e => setForm({ ...form, montantDemande: e.value })}
               mode="decimal" minFractionDigits={2} className="w-full"
               max={typesAide.find(t => t.id === form.typeAideId)?.montantMax || undefined} />
-          </div>
-
-          <div className="field">
-            <label className="font-semibold">Motif de votre demande *</label>
-            <InputTextarea value={form.motif} onChange={e => setForm({ ...form, motif: e.target.value })}
-              rows={5} className="w-full" autoResize
-              placeholder="Expliquez en détail votre situation et le besoin pour lequel vous sollicitez cette aide..." />
           </div>
 
           <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe',

@@ -1,6 +1,5 @@
 package com.cdc.CDCApplication.dto;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public class AdherentDto {
@@ -16,6 +15,7 @@ public class AdherentDto {
         private String telephone;
         private String adresse;
         private String email;
+        private String rib; 
         private LocalDate dateAdhesion;
         private String statut;
         private Long categorieId;
@@ -42,6 +42,8 @@ public class AdherentDto {
         public void setAdresse(String adresse) { this.adresse = adresse; }
         public String getEmail() { return email; }
         public void setEmail(String email) { this.email = email; }
+        public String getRib() { return rib; }
+        public void setRib(String rib) { this.rib = rib; }
         public LocalDate getDateAdhesion() { return dateAdhesion; }
         public void setDateAdhesion(LocalDate d) { this.dateAdhesion = d; }
         public String getStatut() { return statut; }
@@ -67,6 +69,7 @@ public class AdherentDto {
         private String telephone;
         private String adresse;
         private String email;
+        private String rib; // RIB adhérent
         private LocalDate dateAdhesion;
         private String statut;
         private CategorieAdhesionDto.Response categorie;
@@ -75,7 +78,7 @@ public class AdherentDto {
         private LocalDate dateCreation;
         private Long utilisateurId;
         private boolean compteUtilisateurCree;
-        private String photoChemin;  // URL /api/adherents/{id}/photo
+        private String photoChemin; // URL /api/adherents/{id}/photo
 
         public Long getId() { return id; }
         public void setId(Long id) { this.id = id; }
@@ -101,6 +104,8 @@ public class AdherentDto {
         public void setAdresse(String adresse) { this.adresse = adresse; }
         public String getEmail() { return email; }
         public void setEmail(String email) { this.email = email; }
+        public String getRib() { return rib; }
+        public void setRib(String rib) { this.rib = rib; }
         public LocalDate getDateAdhesion() { return dateAdhesion; }
         public void setDateAdhesion(LocalDate d) { this.dateAdhesion = d; }
         public String getStatut() { return statut; }

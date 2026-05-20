@@ -8,6 +8,8 @@ import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.awt.Color;
@@ -22,6 +24,12 @@ import java.util.stream.Collectors;
 public class ListeCotisationService {
 
     private final AdhesionRepository adhesionRepository;
+
+    @Value("${app.nom:AOS Social}")
+    private String nomApp;
+
+    @Value("${app.logo.path:./uploads/logo-aos.png}")
+    private String logoPath;
 
     /* ─── Palette : élégant, neutre, sans bleu ni noir absolu ─── */
     private static final Color ENTETE_BG    = new Color(250, 250, 250);
@@ -80,12 +88,20 @@ public class ListeCotisationService {
         rect(cs, 0, H - 3,  W, 3,  ACCENT_LINE);
         line(cs, 0, H - 80, W, H - 80, ENTETE_BORD, 0.8f);
 
-        txt(cs, "CDCApplication",       M, H - 26, TITRE_COLOR, B, 17);
-        txt(cs, "LISTE DES COTISATIONS",M, H - 44, SOUS_TITRE,  N, 9);
+        // Logo AOS
+        try {
+            java.io.File logoFile = new java.io.File(logoPath);
+            if (logoFile.exists()) {
+                PDImageXObject logo = PDImageXObject.createFromFile(logoPath, doc);
+                cs.drawImage(logo, M, H - 70, 44, 44);
+            }
+        } catch (Exception ignored) {}
+        txt(cs, nomApp, M + 52, H - 26, TITRE_COLOR, B, 17);
+        txt(cs, "LISTE DES COTISATIONS", M + 52, H - 44, SOUS_TITRE, N, 9);
         String filtresTxt = "Annee : " + (annee!=null?annee:"Toutes") +
             "   Statut : " + (statut!=null&&!statut.isBlank()?statut:"Tous") +
             "   Edite le : " + LocalDate.now().format(FMT);
-        txt(cs, filtresTxt, M, H - 60, DATE_COLOR, N, 8);
+        txt(cs, filtresTxt, M + 52, H - 60, DATE_COLOR, N, 8);
         line(cs, M, H - 68, W - M, H - 68, CELL_BORD, 0.5f);
 
         float y = H - 90;
@@ -192,7 +208,7 @@ public class ListeCotisationService {
     }
 
     private void pied(PDPageContentStream cs, PDType1Font N, float W, float M, String filtres) throws Exception {
-        String t = "CDCApplication  ·  Liste des Cotisations  ·  " + LocalDate.now().format(FMT);
+        String t = nomApp + "  ·  Liste des Cotisations  ·  " + LocalDate.now().format(FMT);
         line(cs, M, 30, W-M, 30, PIED_LIGNE, 0.5f);
         float tw = N.getStringWidth(san(t)) / 1000f * 7;
         txt(cs, t, (W-tw)/2, 18, PIED_COLOR, N, 7);

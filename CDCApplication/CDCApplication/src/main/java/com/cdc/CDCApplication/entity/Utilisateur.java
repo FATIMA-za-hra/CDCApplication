@@ -40,8 +40,12 @@ public class Utilisateur {
     @Column(name = "compte_configure")
     private Boolean compteConfigure = false;
 
-    @Column(name = "photo_chemin")
-    private String photoChemin;
+    @Lob
+    @Column(name = "photo_data", columnDefinition = "LONGBLOB")
+    private byte[] photoData;
+
+    @Column(name = "photo_type_contenu", length = 50)
+    private String photoTypeContenu;
 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
@@ -62,19 +66,21 @@ public class Utilisateur {
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
     public String getMotDePasse() { return motDePasse; }
-    public void setMotDePasse(String motDePasse) { this.motDePasse = motDePasse; }
+    public void setMotDePasse(String m) { this.motDePasse = m; }
     public Boolean getActif() { return actif; }
     public void setActif(Boolean actif) { this.actif = actif; }
     public LocalDateTime getDateExpiration() { return dateExpiration; }
-    public void setDateExpiration(LocalDateTime dateExpiration) { this.dateExpiration = dateExpiration; }
+    public void setDateExpiration(LocalDateTime d) { this.dateExpiration = d; }
     public String getTokenResetMdp() { return tokenResetMdp; }
-    public void setTokenResetMdp(String tokenResetMdp) { this.tokenResetMdp = tokenResetMdp; }
+    public void setTokenResetMdp(String t) { this.tokenResetMdp = t; }
     public LocalDateTime getTokenExpiry() { return tokenExpiry; }
-    public void setTokenExpiry(LocalDateTime tokenExpiry) { this.tokenExpiry = tokenExpiry; }
+    public void setTokenExpiry(LocalDateTime t) { this.tokenExpiry = t; }
     public Boolean getCompteConfigure() { return compteConfigure; }
-    public void setCompteConfigure(Boolean compteConfigure) { this.compteConfigure = compteConfigure; }
-    public String getPhotoChemin() { return photoChemin; }
-    public void setPhotoChemin(String photoChemin) { this.photoChemin = photoChemin; }
+    public void setCompteConfigure(Boolean c) { this.compteConfigure = c; }
+    public byte[] getPhotoData() { return photoData; }
+    public void setPhotoData(byte[] p) { this.photoData = p; }
+    public String getPhotoTypeContenu() { return photoTypeContenu; }
+    public void setPhotoTypeContenu(String t) { this.photoTypeContenu = t; }
     public Set<Role> getRoles() { return roles; }
     public void setRoles(Set<Role> roles) { this.roles = roles; }
 }

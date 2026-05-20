@@ -10,12 +10,13 @@ import java.util.List;
 @Table(name = "aides")
 public class Aide {
 
+    
     public enum EtatAide {
-        DEPOSEE,       
-        EN_ETUDE,      
-        VALIDEE,      
-        REJETEE,      
-        ANNULEE        
+        DEPOSEE,       // Demande déposée par l'agent de gestion
+        EN_ETUDE,      // En cours d'étude par l'agent de bureau
+        VALIDEE,       // Validée définitivement par le Président
+        REJETEE,       // Rejetée (par agent bureau ou président)
+        ANNULEE        // Annulée avant traitement
     }
 
     @Id
@@ -39,9 +40,6 @@ public class Aide {
     @Column(name = "montant_accorde")
     private BigDecimal montantAccorde; // défini par l'agent de bureau
 
-    @Column(nullable = false, length = 2000)
-    private String motif;
-
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private EtatAide etat = EtatAide.DEPOSEE;
@@ -56,7 +54,7 @@ public class Aide {
     private String piecesJointesDir;
 
     @Column(name = "saisi_par")
-    private String saisiPar; // email de l'agent qui a saisi
+    private String saisiPar; // Nom Prénom de l'agent qui a saisi (ex: Ali BENMOUSSA)
 
     @OneToMany(mappedBy = "aide", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("ordre ASC")
@@ -79,8 +77,6 @@ public class Aide {
     public void setMontantDemande(BigDecimal m) { this.montantDemande = m; }
     public BigDecimal getMontantAccorde() { return montantAccorde; }
     public void setMontantAccorde(BigDecimal m) { this.montantAccorde = m; }
-    public String getMotif() { return motif; }
-    public void setMotif(String m) { this.motif = m; }
     public EtatAide getEtat() { return etat; }
     public void setEtat(EtatAide e) { this.etat = e; }
     public LocalDate getDateDemande() { return dateDemande; }

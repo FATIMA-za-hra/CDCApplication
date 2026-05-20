@@ -99,7 +99,7 @@ public class AideDto {
     }
 
     public static class WorkflowInfo {
-        // TOUS les champs déclarés en premier
+        
         private Long id;
         private String etape;
         private String decision;
